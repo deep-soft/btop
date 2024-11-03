@@ -335,7 +335,6 @@ jobs:
         shell: bash
         run: |
           chmod +x bin/*
-          mv bin/${{ env.PROG_NAME }} bin/${{ env.PROG_NAME_G }}
 
       - name: Set up directories
         if: ${{ inputs.GPU_version }}
@@ -351,7 +350,7 @@ jobs:
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
           FILENAME=${{ env.PROG_NAME_G }}-${TOOLCHAIN/linux-musl/}-$GIT_HASH
-          cp bin/${{ env.PROG_NAME_G }} .artifacts/$FILENAME
+          cp bin/${{ env.PROG_NAME }} .artifacts/$FILENAME
 
       - name: Upload artifacts
         if: ${{ (github.event.inputs.GPU_version == 'true') || ( github.event.inputs.upload_artifacts == 'true') }}
@@ -367,7 +366,7 @@ jobs:
         run: |
           mkdir -p ${{ env.INSTALL_FOLDER }} || true;
           make prefix=${{ env.PREFIX }} DESTDIR=${{ env.INSTALL_FOLDER }} install;
-          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}${{ env.PREFIX }}/bin/${{ env.PROG_NAME_G }}.txt
+          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}${{ env.PREFIX }}/bin/${{ env.PROG_NAME }}.txt
 
       - name: Archive - ZIP_ARC
         if: ${{ inputs.GPU_version }}
