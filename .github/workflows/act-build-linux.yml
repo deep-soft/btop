@@ -211,8 +211,8 @@ jobs:
       - name: Set up directories
         shell: bash
         run: |
-          mkdir .artifacts
-          mkdir .package
+          mkdir -p .artifacts
+          mkdir -p .package
 
       - name: Create binary atrifacts
         shell: bash
@@ -233,7 +233,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          mkdir ${{ env.INSTALL_FOLDER }} || true;
+          mkdir -p ${{ env.INSTALL_FOLDER }} || true;
           make prefix=${{ env.PREFIX }} DESTDIR=${{ env.INSTALL_FOLDER }} install;
           cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}${{ env.PREFIX }}/bin/${{ env.PROG_NAME }}.txt
 
@@ -341,8 +341,8 @@ jobs:
         if: ${{ inputs.GPU_version }}
         shell: bash
         run: |
-          mkdir .artifacts
-          mkdir .package
+          mkdir -p .artifacts
+          mkdir -p .package
 
       - name: Create binary atrifacts
         if: ${{ inputs.GPU_version }}
@@ -365,7 +365,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          mkdir ${{ env.INSTALL_FOLDER }} || true;
+          mkdir -p ${{ env.INSTALL_FOLDER }} || true;
           make prefix=${{ env.PREFIX }} DESTDIR=${{ env.INSTALL_FOLDER }} install;
           cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}${{ env.PREFIX }}/bin/${{ env.PROG_NAME_G }}.txt
 
