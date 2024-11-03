@@ -283,6 +283,7 @@ jobs:
 
 # GPU_version begin
       - name: set INFO_FILE name
+        if: ${{ inputs.GPU_version }}
         shell: bash
         run: |
           INSTALL_FOLDER=${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }};
@@ -290,6 +291,7 @@ jobs:
           echo "INFO_FILE=$INSTALL_FOLDER.txt" >> $GITHUB_ENV
 
       - name: write info to file ${{ env.INFO_FILE }}
+        if: ${{ inputs.GPU_version }}
         shell: bash
         run: |
           echo "TAG_NAME:     " ${{ env.TAG_NAME     }} >> ${{ env.INFO_FILE }}
@@ -307,23 +309,23 @@ jobs:
 #          make distclean
 
       - name: Build
+        if: ${{ inputs.GPU_version }}
         id: build_gpu_one
         continue-on-error: true
-        if: ${{ inputs.GPU_version }}
         shell: bash
         run: |
           make STATIC=true STRIP=true GPU_SUPPORT=true
 
       - name: try build_gpu_two if build_gpu_one failed
+        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_one.conclusion == 'failure') }}
         id: build_gpu_two
-        if: ${{ inputs.GPU_version }} && success() && steps.build_gpu_one.conclusion == 'failure'
         shell: bash
         run: |
           make CXX=g++ STRIP=true GPU_SUPPORT=true
 
       - name: try build_gpu_three if build_gpu_two failed
+        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_two.conclusion == 'failure') }}
         id: build_gpu_three
-        if: ${{ inputs.GPU_version }} && success() && steps.build_gpu_one.conclusion == 'failure' && steps.build_gpu_two.conclusion == 'failure'
         shell: bash
         run: |
           make CXX=g++ GPU_SUPPORT=true
@@ -352,7 +354,7 @@ jobs:
           cp bin/${{ env.PROG_NAME_G }} .artifacts/$FILENAME
 
       - name: Upload artifacts
-        if: ${{ inputs.GPU_version }} &&  {{ inputs.upload_artifacts }}
+        if: ${{ (github.event.inputs.GPU_version == 'true') || ( github.event.inputs.upload_artifacts == 'true') }}
         uses: deep-soft/upload-artifact@v4
         with:
           name: ${{ env.PROG_NAME_G }}-${{ matrix.toolchain }}
@@ -392,7 +394,7 @@ jobs:
 
 # Archive - ZIP_ALL begin
       - name: Archive - ZIP_ALL
-        if: ${{ inputs.GPU_version }} && {{ inputs.ZIP_ALL }}
+        if: ${{ (github.event.inputs.GPU_version == 'true') || ( github.event.inputs.ZIP_ALL == 'true') }}
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
@@ -403,7 +405,7 @@ jobs:
           # archive name is ${{ env.ZIP_RELEASE_ARCHIVE }}
 
       - name: Publish - ZIP_ALL
-        if: ${{ inputs.GPU_version }} && {{ inputs.ZIP_ALL }}
+        if: ${{ (github.event.inputs.GPU_version == 'true') || ( github.event.inputs.ZIP_ALL == 'true') }}
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
         with:
