@@ -165,7 +165,9 @@ jobs:
       - name: set INFO_FILE name
         shell: bash
         run: |
-          echo "INFO_FILE=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}" >> $GITHUB_ENV
+          INSTALL_FOLDER=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }};
+          echo "INSTALL_FOLDER=$INSTALL_FOLDER" >> $GITHUB_ENV
+          echo "INFO_FILE=$INSTALL_FOLDER.txt" >> $GITHUB_ENV
 
       - name: write info to file ${{ env.INFO_FILE }}
         shell: bash
@@ -179,23 +181,28 @@ jobs:
           echo "PROG_VERSION: " ${{ env.PROG_VERSION }} >> ${{ env.INFO_FILE }}
 
       - name: Fix - Stopping at filesystem boundary
+        shell: bash
         run: |
           git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
 
       - name: Build
+        shell: bash
         run: |
           make STATIC=true STRIP=true
 
       - name: Make executable
+        shell: bash
         run: |
           chmod +x bin/*
 
       - name: Set up directories
+        shell: bash
         run: |
           mkdir .artifacts
           mkdir .package
 
       - name: Create binary atrifacts
+        shell: bash
         run: |
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
@@ -209,8 +216,12 @@ jobs:
           path: '.artifacts/**'
 
       - name: make install
+        continue-on-error: true
+        shell: bash
         run: |
-          make prefix=/usr/local DESTDIR=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }} install 
+          mkdir ${{ env.INSTALL_FOLDER }} || true;
+          make prefix=/usr/local DESTDIR=${{ env.INSTALL_FOLDER }} install;
+          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}
 
       - name: Archive - ZIP_ALL
         if: ${{ inputs.ZIP_ALL }}
