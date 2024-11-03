@@ -302,11 +302,12 @@ jobs:
           echo "PROG_NAME:    " ${{ env.PROG_NAME_G  }} >> ${{ env.INFO_FILE }}
           echo "PROG_VERSION: " ${{ env.PROG_VERSION }} >> ${{ env.INFO_FILE }}
 
-#      - name: Clean before GPU version
-#        if: ${{ inputs.GPU_version }}
-#        shell: bash
-#        run: |
-#          make distclean
+      - name: Clean before GPU version
+        if: ${{ inputs.GPU_version }}
+        shell: bash
+        run: |
+          rm -R bin || true;
+          rm -R obj || true;
 
       - name: Build
         if: ${{ inputs.GPU_version }}
@@ -316,19 +317,19 @@ jobs:
         run: |
           make STATIC=true STRIP=true GPU_SUPPORT=true
 
-      - name: try build_gpu_two if build_gpu_one failed
-        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_one.conclusion == 'failure') }}
-        id: build_gpu_two
-        shell: bash
-        run: |
-          make CXX=g++ STRIP=true GPU_SUPPORT=true
+#      - name: try build_gpu_two if build_gpu_one failed
+#        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_one.conclusion == 'failure') }}
+#        id: build_gpu_two
+#        shell: bash
+#        run: |
+#          make CXX=g++ STRIP=true GPU_SUPPORT=true
 
-      - name: try build_gpu_three if build_gpu_two failed
-        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_two.conclusion == 'failure') }}
-        id: build_gpu_three
-        shell: bash
-        run: |
-          make CXX=g++ GPU_SUPPORT=true
+#      - name: try build_gpu_three if build_gpu_two failed
+#        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_two.conclusion == 'failure') }}
+#        id: build_gpu_three
+#        shell: bash
+#        run: |
+#          make CXX=g++ GPU_SUPPORT=true
 
       - name: Make executable
         if: ${{ inputs.GPU_version }}
