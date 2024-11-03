@@ -316,14 +316,14 @@ jobs:
 
       - name: try build_gpu_two if build_gpu_one failed
         id: build_gpu_two
-        if: ${{ inputs.GPU_version }} || success() || steps.build_gpu_one.conclusion == 'failure'
+        if: ${{ inputs.GPU_version }} && success() && steps.build_gpu_one.conclusion == 'failure'
         shell: bash
         run: |
           make CXX=g++ STRIP=true GPU_SUPPORT=true
 
       - name: try build_gpu_three if build_gpu_two failed
         id: build_gpu_three
-        if: ${{ inputs.GPU_version }} || success() || steps.build_gpu_one.conclusion == 'failure' || steps.build_gpu_two.conclusion == 'failure'
+        if: ${{ inputs.GPU_version }} && success() && steps.build_gpu_one.conclusion == 'failure' && steps.build_gpu_two.conclusion == 'failure'
         shell: bash
         run: |
           make CXX=g++ GPU_SUPPORT=true
@@ -352,7 +352,7 @@ jobs:
           cp bin/${{ env.PROG_NAME_G }} .artifacts/$FILENAME
 
       - name: Upload artifacts
-        if: ${{ inputs.GPU_version || inputs.upload_artifacts }}
+        if: ${{ inputs.GPU_version }} &&  {{ inputs.upload_artifacts }}
         uses: deep-soft/upload-artifact@v4
         with:
           name: ${{ env.PROG_NAME_G }}-${{ matrix.toolchain }}
@@ -392,7 +392,7 @@ jobs:
 
 # Archive - ZIP_ALL begin
       - name: Archive - ZIP_ALL
-        if: ${{ inputs.GPU_version || inputs.ZIP_ALL }}
+        if: ${{ inputs.GPU_version }} && {{ inputs.ZIP_ALL }}
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
@@ -403,7 +403,7 @@ jobs:
           # archive name is ${{ env.ZIP_RELEASE_ARCHIVE }}
 
       - name: Publish - ZIP_ALL
-        if: ${{ inputs.GPU_version || inputs.ZIP_ALL }}
+        if: ${{ inputs.GPU_version }} && {{ inputs.ZIP_ALL }}
         continue-on-error: true
         uses: deep-soft/action-gh-release@v2.1
         with:
