@@ -17,6 +17,11 @@ on:
   workflow_dispatch:
     inputs:
       # if: ${{ inputs.ZIP_ALL }}
+      upload_artifacts:
+        description: upload artifacts
+        type: boolean
+        required: true
+        default: false
       ZIP_ALL:
         description: ZIP ALL
         type: boolean
@@ -210,6 +215,7 @@ jobs:
           cp bin/btop .artifacts/$FILENAME
 
       - name: Upload artifacts
+        if: ${{ inputs.upload_artifacts }}
         uses: deep-soft/upload-artifact@v4
         with:
           name: btop-${{ matrix.toolchain }}
