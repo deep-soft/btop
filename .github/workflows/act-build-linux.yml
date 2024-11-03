@@ -113,7 +113,7 @@ jobs:
     steps:
       - name: Install build tools
         run: |
-          apk add --no-cache coreutils git make tar zstd bash zip findutils
+          apk add --no-cache coreutils git make tar zstd bash zip findutils lowdown
           cat /etc/shells
 
       - name: Fix - Unsafe repository stop
@@ -204,6 +204,11 @@ jobs:
         with:
           name: btop-${{ matrix.toolchain }}
           path: '.artifacts/**'
+
+      - name: make install
+        run: |
+          mkdir ${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ matrix.toolchain }}
+          make install ${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ matrix.toolchain }}
 
       - name: Archive - ZIP_ALL
         if: ${{ inputs.ZIP_ALL }}
