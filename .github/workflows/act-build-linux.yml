@@ -132,12 +132,12 @@ jobs:
           echo "PROG_VERSION=v$_version_" >> $GITHUB_ENV
 
       - name: print program version
-        #shell: bash
+        shell: bash
         run: |
           echo "PROG_VERSION=${{ env.PROG_VERSION }}"
 
       - name: get SHA and version
-        #shell: bash
+        shell: bash
         run: |
           _sha_=$(git log -1 --format='%H')
           _date_=$(date +%Y%m%d)
@@ -158,10 +158,14 @@ jobs:
           echo "TAG_BUILD=$_build_" >> $GITHUB_ENV
           echo "WORK_DIR=$(pwd)" >> $GITHUB_ENV
           echo "TAG_DATE=$_date_" >> $GITHUB_ENV
-          echo "INFO_FILE=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-$_build_.txt" >> $GITHUB_ENV
+
+      - name: set INFO_FILE name
+        shell: bash
+        run: |
+          echo "INFO_FILE=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ matrix.toolchain }}-$_build_.txt" >> $GITHUB_ENV
 
       - name: write info to file ${{ env.INFO_FILE }}
-        #shell: bash
+        shell: bash
         run: |
           echo "TAG_NAME:     " ${{ env.TAG_NAME     }} >> ${{ env.INFO_FILE }}
           echo "TAG_VERSION:  " ${{ env.TAG_VERSION  }} >> ${{ env.INFO_FILE }}
@@ -206,7 +210,7 @@ jobs:
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
-          filename: '${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-ALL'
+          filename: '${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ matrix.toolchain }}-ALL'
           directory: ${{ github.workspace }}
           path: '.'
           env_variable: ZIP_ALL
