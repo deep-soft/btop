@@ -282,6 +282,14 @@ jobs:
 # Archive - ZIP_ALL end
 
 # GPU_version begin
+      - name: Install build tools
+        continue-on-error: true
+        run: |
+          apk add --no-cache coreutils git make tar zstd bash zip findutils
+          cat /etc/shells
+          apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
+          apk add --no-cache --update gcc g++ make linux-headers
+
       - name: set INFO_FILE name
         shell: bash
         run: |
@@ -307,10 +315,19 @@ jobs:
           make distclean
 
       - name: Build
+        id: build_gpu_one
+        continue-on-error: true
         if: ${{ inputs.GPU_version }}
         shell: bash
         run: |
           make STATIC=true STRIP=true GPU_SUPPORT=true
+
+      - name: try build_gpu_two if build_gpu_one failed
+        id: build_gpu_two
+        if: ${{ inputs.GPU_version }} || success() || steps.build_gpu_one.conclusion == 'failure'
+        shell: bash
+        run: |
+          make CXX=g++ STRIP=true GPU_SUPPORT=true
 
       - name: Make executable
         if: ${{ inputs.GPU_version }}
