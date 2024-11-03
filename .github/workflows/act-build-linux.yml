@@ -156,7 +156,7 @@ jobs:
           echo "TAG_BUILD=$_build_" >> $GITHUB_ENV
           echo "WORK_DIR=$(pwd)" >> $GITHUB_ENV
           echo "TAG_DATE=$_date_" >> $GITHUB_ENV
-          echo "INFO_FILE=${{ env.matrix.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-$_build_.txt >> $GITHUB_ENV
+          echo "INFO_FILE=${{ env.matrix.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-$_build_.txt" >> $GITHUB_ENV
 
       - name: write info to file ${{ env.INFO_FILE }}
         #shell: bash
