@@ -113,7 +113,8 @@ jobs:
     steps:
       - name: Install build tools
         run: |
-          apk add --no-cache coreutils git make tar zstd
+          apk add --no-cache coreutils git make tar zstd bash
+          cat /etc/shells
 
       - name: Fix - Unsafe repository stop
         run: |
