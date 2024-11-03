@@ -112,10 +112,11 @@ jobs:
 
     steps:
       - name: Install build tools
+        continue-on-error: true
         run: |
-          apk add quilt --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
-          apk add --no-cache coreutils git make tar zstd bash zip findutils lowdown
+          apk add --no-cache coreutils git make tar zstd bash zip findutils
           cat /etc/shells
+          apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
 
       - name: Fix - Unsafe repository stop
         run: |
@@ -127,7 +128,7 @@ jobs:
           submodules: recursive
 
       - name: set program version variable
-        #shell: bash
+        shell: bash
         run: |
           _version_=$(grep "const string Version"  ./src/btop.cpp | awk -F "=" '{print $2}' | tr -d '"' | tr -d ';' | tr -d ' ')
           echo "PROG_VERSION=v$_version_" >> $GITHUB_ENV
@@ -149,6 +150,7 @@ jobs:
           _sha_short_=$(echo ${_sha_::$_ref_len_})
 
           echo "TAG_REF=$_sha_short_" >> $GITHUB_ENV
+          echo "TAG_SHA=$_sha_short_" >> $GITHUB_ENV
 
           _version_=$(grep "const string Version" ./src/btop.cpp | awk -F "=" '{print $2}' | tr -d '"' | tr -d ';' | tr -d ' ')
           echo "VERSION=$_version_" >> $GITHUB_ENV
