@@ -210,7 +210,6 @@ jobs:
 
       - name: make install
         run: |
-          mkdir ${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}
           make prefix=/usr/local DESTDIR=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }} install 
 
       - name: Archive - ZIP_ALL
