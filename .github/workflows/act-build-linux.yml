@@ -130,7 +130,6 @@ jobs:
           apk add --no-cache coreutils git make tar zstd bash zip findutils
           cat /etc/shells
           apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
-          apk add --no-cache --update gcc g++ make linux-headers
 
       - name: Fix - Unsafe repository stop
         run: |
