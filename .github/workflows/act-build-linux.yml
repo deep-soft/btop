@@ -3,15 +3,18 @@ name: act- Linux
 
 env:
    TAG_NAME:      "btop"
+   TAG_NAME_G:    "btopg"
    TAG_VERSION:   "v1.1.0"
    TAG_BUILD:     "-b"
    TAG_REF:       "0000000"
    TAG_SHA:       "0000000"
    PROG_NAME:     "btop"
+   PROG_NAME_G:   "btopg"
    PROG_VERSION:  "v1.1.0"
    VERSION:       "1.1.0"
    DRAFT:         true
    INFO_FILE:     "_info_.txt"
+   PREFIX:        "/usr/local"
 
 on:
   workflow_dispatch:
@@ -19,6 +22,11 @@ on:
       # if: ${{ inputs.ZIP_ALL }}
       upload_artifacts:
         description: upload artifacts
+        type: boolean
+        required: true
+        default: false
+      GPU_version:
+        description: GPU version
         type: boolean
         required: true
         default: false
@@ -147,7 +155,7 @@ jobs:
         shell: bash
         run: |
           _sha_=$(git log -1 --format='%H')
-          _date_=$(date +%Y%m%d)
+          _date_=$(date +%Y%m%d_%H%M)
           echo "TAG_DATE=$_date_" >> $GITHUB_ENV
 
           _ref_org_=${{ env.TAG_REF }}
@@ -211,14 +219,14 @@ jobs:
         run: |
           TOOLCHAIN=${{ matrix.toolchain }}
           GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
-          FILENAME=btop-${TOOLCHAIN/linux-musl/}-$GIT_HASH
-          cp bin/btop .artifacts/$FILENAME
+          FILENAME=${{ env.PROG_NAME }}-${TOOLCHAIN/linux-musl/}-$GIT_HASH
+          cp bin/${{ env.PROG_NAME }} .artifacts/$FILENAME
 
       - name: Upload artifacts
         if: ${{ inputs.upload_artifacts }}
         uses: deep-soft/upload-artifact@v4
         with:
-          name: btop-${{ matrix.toolchain }}
+          name: ${{ env.PROG_NAME }}-${{ matrix.toolchain }}
           path: '.artifacts/**'
 
       - name: make install
@@ -226,8 +234,8 @@ jobs:
         shell: bash
         run: |
           mkdir ${{ env.INSTALL_FOLDER }} || true;
-          make prefix=/usr/local DESTDIR=${{ env.INSTALL_FOLDER }} install;
-          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}/usr/local/bin/btop.txt
+          make prefix=${{ env.PREFIX }} DESTDIR=${{ env.INSTALL_FOLDER }} install;
+          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}${{ env.PREFIX }}/bin/${{ env.PROG_NAME }}.txt
 
       - name: Archive - ZIP_ARC
         uses: deep-soft/zip-release@v2.1
@@ -249,6 +257,7 @@ jobs:
             ${{ env.ZIP_ARC }}
             ${{ env.INFO_FILE }}
 
+# Archive - ZIP_ALL begin
       - name: Archive - ZIP_ALL
         if: ${{ inputs.ZIP_ALL }}
         uses: deep-soft/zip-release@v2.1
@@ -270,3 +279,121 @@ jobs:
           files: |
             ${{ env.ZIP_ALL }}
             ${{ env.INFO_FILE }}
+# Archive - ZIP_ALL end
+
+# GPU_version begin
+      - name: set INFO_FILE name
+        shell: bash
+        run: |
+          INSTALL_FOLDER=${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }};
+          echo "INSTALL_FOLDER=$INSTALL_FOLDER" >> $GITHUB_ENV
+          echo "INFO_FILE=$INSTALL_FOLDER.txt" >> $GITHUB_ENV
+
+      - name: write info to file ${{ env.INFO_FILE }}
+        shell: bash
+        run: |
+          echo "TAG_NAME:     " ${{ env.TAG_NAME     }} >> ${{ env.INFO_FILE }}
+          echo "TAG_VERSION:  " ${{ env.TAG_VERSION  }} >> ${{ env.INFO_FILE }}
+          echo "TAG_BUILD:    " ${{ env.TAG_BUILD    }} >> ${{ env.INFO_FILE }}
+          echo "TAG_REF:      " ${{ env.TAG_REF      }} >> ${{ env.INFO_FILE }}
+          echo "TAG_SHA:      " ${{ env.TAG_SHA      }} >> ${{ env.INFO_FILE }}
+          echo "PROG_NAME:    " ${{ env.PROG_NAME_G  }} >> ${{ env.INFO_FILE }}
+          echo "PROG_VERSION: " ${{ env.PROG_VERSION }} >> ${{ env.INFO_FILE }}
+
+      - name: Clean before GPU version
+        if: ${{ inputs.GPU_version }}
+        shell: bash
+        run: |
+          make distclean
+
+      - name: Build
+        if: ${{ inputs.GPU_version }}
+        shell: bash
+        run: |
+          make STATIC=true STRIP=true GPU_SUPPORT=true
+
+      - name: Make executable
+        if: ${{ inputs.GPU_version }}
+        shell: bash
+        run: |
+          chmod +x bin/*
+          mv bin/${{ env.PROG_NAME }} bin/${{ env.PROG_NAME_G }}
+
+      - name: Set up directories
+        if: ${{ inputs.GPU_version }}
+        shell: bash
+        run: |
+          mkdir .artifacts
+          mkdir .package
+
+      - name: Create binary atrifacts
+        if: ${{ inputs.GPU_version }}
+        shell: bash
+        run: |
+          TOOLCHAIN=${{ matrix.toolchain }}
+          GIT_HASH=$(git rev-parse --short "${{ github.sha }}")
+          FILENAME=${{ env.PROG_NAME_G }}-${TOOLCHAIN/linux-musl/}-$GIT_HASH
+          cp bin/${{ env.PROG_NAME_G }} .artifacts/$FILENAME
+
+      - name: Upload artifacts
+        if: ${{ inputs.GPU_version || inputs.upload_artifacts }}
+        uses: deep-soft/upload-artifact@v4
+        with:
+          name: ${{ env.PROG_NAME_G }}-${{ matrix.toolchain }}
+          path: '.artifacts/**'
+
+      - name: make install
+        if: ${{ inputs.GPU_version }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          mkdir ${{ env.INSTALL_FOLDER }} || true;
+          make prefix=${{ env.PREFIX }} DESTDIR=${{ env.INSTALL_FOLDER }} install;
+          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}${{ env.PREFIX }}/bin/${{ env.PROG_NAME_G }}.txt
+
+      - name: Archive - ZIP_ARC
+        if: ${{ inputs.GPU_version }}
+        uses: deep-soft/zip-release@v2.1
+        with:
+          type: 'zip'
+          filename: '${{ github.workspace }}/${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}'
+          directory: ${{ env.INSTALL_FOLDER }}
+          path: '.'
+          env_variable: ZIP_ARC
+          # archive name is ${{ env.ZIP_RELEASE_ARCHIVE }}
+
+      - name: Publish - ZIP_ARC
+        if: ${{ inputs.GPU_version }}
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: ${{ env.DRAFT }}
+          tag_name: ${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}
+          files: |
+            ${{ env.ZIP_ARC }}
+            ${{ env.INFO_FILE }}
+# GPU_version end
+
+# Archive - ZIP_ALL begin
+      - name: Archive - ZIP_ALL
+        if: ${{ inputs.GPU_version || inputs.ZIP_ALL }}
+        uses: deep-soft/zip-release@v2.1
+        with:
+          type: 'zip'
+          filename: '${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}-ALL'
+          directory: ${{ github.workspace }}
+          path: '.'
+          env_variable: ZIP_ALL
+          # archive name is ${{ env.ZIP_RELEASE_ARCHIVE }}
+
+      - name: Publish - ZIP_ALL
+        if: ${{ inputs.GPU_version || inputs.ZIP_ALL }}
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: ${{ env.DRAFT }}
+          tag_name: ${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-ALL
+          files: |
+            ${{ env.ZIP_ALL }}
+            ${{ env.INFO_FILE }}
+# Archive - ZIP_ALL end
