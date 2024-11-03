@@ -221,7 +221,27 @@ jobs:
         run: |
           mkdir ${{ env.INSTALL_FOLDER }} || true;
           make prefix=/usr/local DESTDIR=${{ env.INSTALL_FOLDER }} install;
-          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}
+          cp ${{ env.INFO_FILE }} ${{ env.INSTALL_FOLDER }}/usr/local/bin/btop.txt
+
+      - name: Archive - ZIP_ARC
+        uses: deep-soft/zip-release@v2.1
+        with:
+          type: 'zip'
+          filename: '${{ github.workspace }}/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}'
+          directory: ${{ env.INSTALL_FOLDER }}
+          path: '.'
+          env_variable: ZIP_ARC
+          # archive name is ${{ env.ZIP_RELEASE_ARCHIVE }}
+
+      - name: Publish - ZIP_ARC
+        continue-on-error: true
+        uses: deep-soft/action-gh-release@v2.1
+        with:
+          draft: ${{ env.DRAFT }}
+          tag_name: ${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}
+          files: |
+            ${{ env.ZIP_ARC }}
+            ${{ env.INFO_FILE }}
 
       - name: Archive - ZIP_ALL
         if: ${{ inputs.ZIP_ALL }}
