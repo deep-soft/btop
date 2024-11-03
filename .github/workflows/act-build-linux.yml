@@ -130,6 +130,7 @@ jobs:
           apk add --no-cache coreutils git make tar zstd bash zip findutils
           cat /etc/shells
           apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
+          apk add --no-cache --update gcc g++ make linux-headers
 
       - name: Fix - Unsafe repository stop
         run: |
@@ -282,14 +283,6 @@ jobs:
 # Archive - ZIP_ALL end
 
 # GPU_version begin
-      - name: Install build tools
-        continue-on-error: true
-        run: |
-          apk add --no-cache coreutils git make tar zstd bash zip findutils
-          cat /etc/shells
-          apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
-          apk add --no-cache --update gcc g++ make linux-headers
-
       - name: set INFO_FILE name
         shell: bash
         run: |
@@ -308,11 +301,11 @@ jobs:
           echo "PROG_NAME:    " ${{ env.PROG_NAME_G  }} >> ${{ env.INFO_FILE }}
           echo "PROG_VERSION: " ${{ env.PROG_VERSION }} >> ${{ env.INFO_FILE }}
 
-      - name: Clean before GPU version
-        if: ${{ inputs.GPU_version }}
-        shell: bash
-        run: |
-          make distclean
+#      - name: Clean before GPU version
+#        if: ${{ inputs.GPU_version }}
+#        shell: bash
+#        run: |
+#          make distclean
 
       - name: Build
         id: build_gpu_one
@@ -328,6 +321,13 @@ jobs:
         shell: bash
         run: |
           make CXX=g++ STRIP=true GPU_SUPPORT=true
+
+      - name: try build_gpu_three if build_gpu_two failed
+        id: build_gpu_three
+        if: ${{ inputs.GPU_version }} || success() || steps.build_gpu_one.conclusion == 'failure' || steps.build_gpu_two.conclusion == 'failure'
+        shell: bash
+        run: |
+          make CXX=g++ GPU_SUPPORT=true
 
       - name: Make executable
         if: ${{ inputs.GPU_version }}
