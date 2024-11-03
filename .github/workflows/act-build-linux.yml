@@ -113,6 +113,7 @@ jobs:
     steps:
       - name: Install build tools
         run: |
+          apk add quilt --repository=https://dl-cdn.alpinelinux.org/alpine/edge/community
           apk add --no-cache coreutils git make tar zstd bash zip findutils lowdown
           cat /etc/shells
 
