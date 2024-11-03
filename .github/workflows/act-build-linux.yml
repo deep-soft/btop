@@ -151,12 +151,13 @@ jobs:
           _version_=$(grep "const string Version" ./src/btop.cpp | awk -F "=" '{print $2}' | tr -d '"' | tr -d ';' | tr -d ' ')
           echo "VERSION=$_version_" >> $GITHUB_ENV
           echo "PROG_VERSION=v$_version_" >> $GITHUB_ENV
+          echo "TAG_VERSION=v$_version_" >> $GITHUB_ENV
           _build_=${{ env.TAG_BUILD }}-$_date_-$_sha_short_
 
           echo "TAG_BUILD=$_build_" >> $GITHUB_ENV
           echo "WORK_DIR=$(pwd)" >> $GITHUB_ENV
           echo "TAG_DATE=$_date_" >> $GITHUB_ENV
-          echo "INFO_FILE=${{ env.matrix.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-$_build_.txt" >> $GITHUB_ENV
+          echo "INFO_FILE=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-$_build_.txt" >> $GITHUB_ENV
 
       - name: write info to file ${{ env.INFO_FILE }}
         #shell: bash
@@ -204,7 +205,7 @@ jobs:
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
-          filename: '${{ env.matrix.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-ALL'
+          filename: '${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.matrix.toolchain }}-ALL'
           directory: ${{ github.workspace }}
           path: '.'
           env_variable: ZIP_ALL
