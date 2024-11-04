@@ -36,7 +36,12 @@ jobs:
         uses: deep-soft/checkout@v4
 
       - name: Install build tools
-        run: apk add --no-cache --update gcc g++ make linux-headers
+        run: |
+          apk add --no-cache --update gcc g++ make linux-headers
+          apk add --no-cache coreutils git make tar zstd bash zip findutils
+          apk add --no-cache lowdown
+          cat /etc/shells
+          # apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
 
       - name: set program version variable
         shell: bash
