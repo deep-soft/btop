@@ -32,9 +32,6 @@ jobs:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: true
     steps:
-      - name: Checkout source
-        uses: deep-soft/checkout@v4
-
       - name: Install build tools
         run: |
           apk add --no-cache --update gcc g++ make linux-headers
@@ -42,6 +39,13 @@ jobs:
           apk add --no-cache lowdown
           cat /etc/shells
           # apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
+
+      - name: Fix - Unsafe repository stop
+        run: |
+          git config --global --add safe.directory /__w/btop/btop
+
+      - name: Checkout source
+        uses: deep-soft/checkout@v4
 
       - name: set program version variable
         shell: bash
@@ -95,6 +99,11 @@ jobs:
           echo "TAG_SHA:      " ${{ env.TAG_SHA      }} >> ${{ env.INFO_FILE }}
           echo "PROG_NAME:    " ${{ env.PROG_NAME    }} >> ${{ env.INFO_FILE }}
           echo "PROG_VERSION: " ${{ env.PROG_VERSION }} >> ${{ env.INFO_FILE }}
+
+      - name: Fix - Stopping at filesystem boundary
+        shell: bash
+        run: |
+          git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
 
       - name: Build
         continue-on-error: true
