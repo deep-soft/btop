@@ -3,7 +3,7 @@
 # CMake configuration for btop
 #
 
-cmake_minimum_required(VERSION 3.24)
+cmake_minimum_required(VERSION 3.25)
 
 # Disable in-source builds since they would override the Makefile
 if("${CMAKE_CURRENT_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_BINARY_DIR}")
@@ -36,13 +36,18 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BTOP_STATIC "Link btop statically" OFF)
-option(BTOP_LTO "Enable LTO" ON)
 option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
-option(BTOP_FORTIFY "Detect buffer overflows with _FORTIFY_SOURCE=3" ON)
 option(BTOP_GPU "Enable GPU support" ON)
 cmake_dependent_option(BTOP_RSMI_STATIC "Link statically to ROCm SMI" OFF "BTOP_GPU" OFF)
+
+# Enable LTO in release builds by default
+if(CMAKE_BUILD_TYPE MATCHES "Rel(ease|WithDebInfo)")
+  option(BTOP_LTO "Enable LTO" ON)
+else()
+  option(BTOP_LTO "Enable LTO" OFF)
+endif()
 
 if(BTOP_STATIC AND NOT APPLE)
   # Set this before calling find_package
@@ -94,7 +99,7 @@ execute_process(
   OUTPUT_VARIABLE GIT_COMMIT
   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 set(CONFIGURE_COMMAND
-    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_USE_MOLD=${BTOP_USE_MOLD} -DBTOP_FORTIFY=${BTOP_FORTIFY} -DBTOP_GPU=${BTOP_GPU}"
+    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_USE_MOLD=${BTOP_USE_MOLD} -DBTOP_GPU=${BTOP_GPU}"
 )
 get_filename_component(CXX_COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
 set(COMPILER "${CXX_COMPILER_BASENAME}")
@@ -103,9 +108,11 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/src/config.h.in ${CMAKE_CURRENT_BINAR
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 
 # Check for and enable LTO
-check_ipo_supported(RESULT ipo_supported)
-if(ipo_supported AND BTOP_LTO)
-  set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+if(BTOP_LTO)
+  check_ipo_supported(RESULT ipo_supported)
+  if(ipo_supported)
+    set_target_properties(btop PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+  endif()
 endif()
 
 target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic -ftree-vectorize)
@@ -139,8 +146,6 @@ target_compile_definitions(btop PRIVATE
   FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
   $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
-  # Only has an effect with optimizations enabled
-  $<$<AND:$<NOT:$<CONFIG:Debug>>,$<BOOL:${BTOP_FORTIFY}>>:_FORTIFY_SOURCE=3>
 )
 
 target_include_directories(btop SYSTEM PRIVATE include)
@@ -177,6 +182,9 @@ if(LINUX AND BTOP_GPU)
     set(CMAKE_MODULE_PATH _CMAKE_MODULE_PATH)
 
     target_link_libraries(btop ROCm)
+  endif()
+  if(NOT BTOP_STATIC)
+    target_link_libraries(btop ${CMAKE_DL_LIBS})
   endif()
 endif()
 
@@ -226,7 +234,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
   target_link_libraries(btop kvm::kvm)
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NetBSD")
   if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    target_compile_options(btop PRIVATE -static-libstdc++ -std=c++20 -DNDEBUG)
+    target_compile_options(btop PRIVATE -static-libstdc++)
   endif()
   find_package(kvm REQUIRED)
   find_package(proplib REQUIRED)
@@ -239,14 +247,17 @@ find_program(LOWDOWN_EXECUTABLE lowdown)
 
 if(LOWDOWN_EXECUTABLE)
   # Custom target to compile Markdown to man page using lowdown
-  add_custom_target(btop.1 ALL
-      COMMAND lowdown -s -Tman -o btop.1 manpage.md
-      WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  add_custom_command(
+    OUTPUT btop.1
+    COMMAND lowdown -s -T man -o btop.1 ${CMAKE_CURRENT_SOURCE_DIR}/manpage.md
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/manpage.md
+    VERBATIM
   )
+  add_custom_target(generate_manpage ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/btop.1)
   # Install the man page
-  install(FILES btop.1 DESTINATION "share/man/man1")
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/btop.1" DESTINATION "share/man/man1")
 else()
-  message(WARNING "Command 'lowdown' not found: skipping generating man page btop.1")
+  message(STATUS "Command 'lowdown' not found: skipping generating man page btop.1")
 endif()
 
 install(TARGETS btop RUNTIME)
