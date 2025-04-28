@@ -97,7 +97,7 @@ namespace Term {
 		struct winsize wsize {};
 		if (uses_dev_tty || ioctl(STDOUT_FILENO, TIOCGWINSZ, &wsize) < 0 || (wsize.ws_col == 0 && wsize.ws_row == 0)) {
 			Logger::error(R"(Couldn't determine terminal size of "STDOUT_FILENO"!)");
-			auto dev_tty = open("/dev/tty", O_RDONLY);
+			auto dev_tty = open("/dev/tty", O_RDONLY | O_CLOEXEC);
 			if (dev_tty != -1) {
 				ioctl(dev_tty, TIOCGWINSZ, &wsize);
 				close(dev_tty);
@@ -298,20 +298,18 @@ namespace Tools {
 		return out;
 	}
 
-	string ltrim(const string& str, const string& t_str) {
-		std::string_view str_v{str};
-		while (str_v.starts_with(t_str))
-			str_v.remove_prefix(t_str.size());
+	string_view ltrim(string_view str, const string_view t_str) {
+		while (str.starts_with(t_str))
+			str.remove_prefix(t_str.size());
 
-		return string{str_v};
+		return str;
 	}
 
-	string rtrim(const string& str, const string& t_str) {
-		std::string_view str_v{str};
-		while (str_v.ends_with(t_str))
-			str_v.remove_suffix(t_str.size());
+	string_view rtrim(string_view str, const string_view t_str) {
+		while (str.ends_with(t_str))
+			str.remove_suffix(t_str.size());
 
-		return string{str_v};
+		return str;
 	}
 
 	auto ssplit(const string& str, const char& delim) -> vector<string> {
@@ -401,7 +399,19 @@ namespace Tools {
 	string floating_humanizer(uint64_t value, bool shorten, size_t start, bool bit, bool per_second) {
 		string out;
 		const size_t mult = (bit) ? 8 : 1;
+
 		bool mega = Config::getB("base_10_sizes");
+
+		// Bitrates
+	    if(bit && per_second) {
+			const auto& base_10_bitrate = Config::getS("base_10_bitrate");
+			if(base_10_bitrate == "True") {
+				mega = true;
+			} else if(base_10_bitrate == "False") {
+				mega = false;
+			}
+			// Default or "Auto": Uses base_10_sizes for bitrates
+		}
 
 		// taking advantage of type deduction for array creation (since C++17)
 		// combined with string literals (operator""s)
@@ -525,7 +535,7 @@ namespace Tools {
 		else this->atom.store(true);
 	}
 
-	atomic_lock::~atomic_lock() {
+	atomic_lock::~atomic_lock() noexcept {
 		this->atom.store(false);
 	}
 
@@ -558,6 +568,7 @@ namespace Tools {
 	string hostname() {
 		char host[HOST_NAME_MAX];
 		gethostname(host, HOST_NAME_MAX);
+		host[HOST_NAME_MAX - 1] = '\0';
 		return string{host};
 	}
 
@@ -655,11 +666,15 @@ namespace Logger {
 				this->status = seteuid(Global::real_uid);
 			}
 		}
-		~lose_priv() {
+		~lose_priv() noexcept {
 			if (status == 0) {
 				status = seteuid(Global::set_uid);
 			}
 		}
+		lose_priv(const lose_priv& other) = delete;
+		lose_priv& operator=(const lose_priv& other) = delete;
+		lose_priv(lose_priv&& other) = delete;
+		lose_priv& operator=(lose_priv&& other) = delete;
 	};
 
 	void set(const string& level) {

@@ -177,8 +177,8 @@ namespace Input {
 				}
 
 			}
-			else if (Key_escapes.contains(key))
-				key = Key_escapes.at(key);
+			else if (auto it = Key_escapes.find(key); it != Key_escapes.end())
+				key = it->second;
 			else if (ulen(key) > 1)
 				key.clear();
 
@@ -317,7 +317,7 @@ namespace Input {
 				}
 				else if (is_in(key, "f", "/")) {
 					Config::flip("proc_filtering");
-					Proc::filter = { Config::getS("proc_filter") };
+					Proc::filter = Draw::TextEdit{Config::getS("proc_filter")};
 					old_filter = Proc::filter.text;
 				}
 				else if (key == "e") {
