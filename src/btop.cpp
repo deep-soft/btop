@@ -81,7 +81,7 @@ namespace Global {
 		{"#801414", "██████╔╝   ██║   ╚██████╔╝██║        ╚═╝    ╚═╝"},
 		{"#000000", "╚═════╝    ╚═╝    ╚═════╝ ╚═╝"},
 	};
-	const string Version = "1.4.1";
+	const string Version = "1.4.2";
 
 	int coreCount;
 	string overlay;
@@ -99,9 +99,7 @@ namespace Global {
 	string exit_error_msg;
 	atomic<bool> thread_exception (false);
 
-	bool debuginit{};
 	bool debug{};
-	bool utf_force{};
 
 	uint64_t start_time;
 
@@ -176,7 +174,7 @@ void term_resize(bool force) {
 				#else
 					if (intKey > 0 and intKey < 5) {
 				#endif
-						auto box = all_boxes.at(intKey);
+						const auto& box = all_boxes.at(intKey);
 						Config::current_preset = -1;
 						Config::toggle_box(box);
 						boxes = Config::getS("shown_boxes");
@@ -824,6 +822,8 @@ int main(const int argc, const char** argv) {
 		}
 	}
 
+	Global::debug = cli.debug;
+
 	{
 		const auto config_dir = Config::get_config_dir();
 		if (config_dir.has_value()) {
@@ -931,10 +931,10 @@ int main(const int argc, const char** argv) {
 			}
 		}
 	#else
-		if (found.empty() and Global::utf_force)
-			Logger::warning("No UTF-8 locale detected! Forcing start with --utf-force argument.");
-		else if (found.empty()) {
-			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --utf-force argument to force start if you're sure your terminal can handle it.";
+		if (found.empty() and cli.force_utf) {
+			Logger::warning("No UTF-8 locale detected! Forcing start with --force-utf argument.");
+		} else if (found.empty()) {
+			Global::exit_error_msg = "No UTF-8 locale detected!\nUse --force-utf argument to force start if you're sure your terminal can handle it.";
 			clean_quit(1);
 		}
 	#endif

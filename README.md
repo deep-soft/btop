@@ -224,7 +224,7 @@ Any support is greatly appreciated!
 
 For best experience, a terminal with support for:
 
-* 24-bit truecolor ([See list of terminals with truecolor support](https://github.com//termstandard/colors))
+* 24-bit truecolor ([See list of terminals with truecolor support](https://github.com/termstandard/colors))
 * 256-color terminals are supported through 24-bit to 256-color conversion when setting "truecolor" to False in the options or with "-lc/--low-color" arguments.
 * 16 color TTY mode will be activated if a real tty device is detected. Can be forced with "-t/--tty_on" arguments.
 * Wide characters (Are sometimes problematic in web-based terminals)
@@ -263,15 +263,15 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
 
 * If you are having problems with the characters in the graphs not looking like they do in the screenshots, it's likely a problem with your systems configured fallback font not having support for braille characters.
 
-* See [Terminess Powerline](https://github.com/ryanoasis/nerd-fonts/tree/master/patched-fonts/Terminus/terminus-ttf-4.40.1) for an example of a font that includes the braille symbols.
+* See [Terminess Powerline](https://github.com/ryanoasis/nerd-fonts/blob/master/patched-fonts/Terminus/TerminessNerdFontMono-Regular.ttf) for an example of a font that includes the braille symbols.
 
 * See comments by @sgleizes [link](https://github.com/aristocratos/bpytop/issues/100#issuecomment-684036827) and @XenHat [link](https://github.com/aristocratos/bpytop/issues/100#issuecomment-691585587) in issue #100 for possible solutions.
 
-* If text are misaligned and you are using Konsole or Yakuake, turning off "Bi-Directional text rendering" is a possible fix.
+* If text is misaligned and you use Konsole or Yakuake, turning off "Bi-Directional text rendering" is a possible fix.
 
-* Characters clipping in to each other or text/border misalignments is not bugs caused by btop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
+* Characters clipping into each other or text/border misalignments are not bugs caused by btop, but most likely a fontconfig or terminal problem where the braille characters making up the graphs aren't rendered correctly.
 
-* Look to the creators of the terminal emulator you use to fix these issues if the previous mentioned fixes don't work for you.
+* Look to the creators of the terminal emulator you use to fix these issues if the previously mentioned fixes don't work for you.
 
 ## Screenshots
 
@@ -555,7 +555,6 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
    | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
    | `-DBTOP_GPU=<ON\|OFF>`          | Enable GPU support (ON by default)                                      |
@@ -726,7 +725,6 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
    | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
@@ -903,7 +901,6 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_STATIC=<ON\|OFF>`       | Enables static linking (OFF by default)                                 |
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
    | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
@@ -1064,7 +1061,6 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
    | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
@@ -1225,7 +1221,6 @@ Can be set with `make setcap` (preferred) or `make setuid` or by running btop wi
    | Configure flag                  | Description                                                             |
    |---------------------------------|-------------------------------------------------------------------------|
    | `-DBTOP_LTO=<ON\|OFF>`          | Enables link time optimization (ON by default)                          |
-   | `-DBTOP_USE_MOLD=<ON\|OFF>`     | Use mold to link btop (OFF by default)                                  |
    | `-DBTOP_PEDANTIC=<ON\|OFF>`     | Compile with additional warnings (OFF by default)                       |
    | `-DBTOP_WERROR=<ON\|OFF>`       | Compile with warnings as errors (OFF by default)                        |
    | `-DCMAKE_INSTALL_PREFIX=<path>` | The installation prefix ('/usr/local' by default)                       |
@@ -1499,18 +1494,19 @@ log_level = "DEBUG"
 #### Command line options
 
 ```text
-usage: btop [-h] [-v] [-/+t] [-p <id>] [--utf-force] [--debug]
+Usage: btop [OPTIONS]
 
-optional arguments:
-  -h, --help            show this help message and exit
-  -v, --version         show version info and exit
-  -lc, --low-color      disable truecolor, converts 24-bit colors to 256-color
-  -t, --tty_on          force (ON) tty mode, max 16 colors and tty friendly graph symbols
-  +t, --tty_off         force (OFF) tty mode
-  -p, --preset <id>     start with preset, integer value between 0-9
-  --utf-force           force start even if no UTF-8 locale was detected
-  --debug               start in DEBUG mode: shows microsecond timer for information collect
-                        and screen draw functions and sets loglevel to DEBUG
+Options:
+  -c, --config <file>  Path to a config file
+  -d, --debug          Start in debug mode with additional logs and metrics
+      --force-utf      Override automatic UTF locale detection
+  -l, --low-color      Disable true color, 256 colors only
+  -p, --preset <id>    Start with a preset (0-9)
+  -t, --tty            Force tty mode with ANSI graph symbols and 16 colors only
+      --no-tty         Force disable tty mode
+  -u, --update <ms>    Set an initial update rate in milliseconds
+  -h, --help           Show this help message and exit
+  -V, --version        Show a version message and exit (more with --version)
 ```
 
 ## LICENSE

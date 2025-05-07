@@ -22,7 +22,7 @@ include(CheckIPOSupported)
 include(CMakeDependentOption)
 
 # Make our Find<Package>.cmake files available
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/")
 
 # When the build type is not set we can't fortify
 if(NOT CMAKE_BUILD_TYPE)
@@ -36,7 +36,6 @@ set(CMAKE_COLOR_DIAGNOSTICS ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(BTOP_STATIC "Link btop statically" OFF)
-option(BTOP_USE_MOLD "Use mold to link btop" OFF)
 option(BTOP_PEDANTIC "Enable a bunch of additional warnings" OFF)
 option(BTOP_WERROR "Compile with warnings as errors" OFF)
 option(BTOP_GPU "Enable GPU support" ON)
@@ -100,7 +99,7 @@ execute_process(
   OUTPUT_VARIABLE GIT_COMMIT
   OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
 set(CONFIGURE_COMMAND
-    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_USE_MOLD=${BTOP_USE_MOLD} -DBTOP_GPU=${BTOP_GPU}"
+    "cmake -DBTOP_STATIC=${BTOP_STATIC} -DBTOP_GPU=${BTOP_GPU}"
 )
 get_filename_component(CXX_COMPILER_BASENAME "${CMAKE_CXX_COMPILER}" NAME)
 set(COMPILER "${CXX_COMPILER_BASENAME}")
@@ -116,7 +115,7 @@ if(BTOP_LTO)
   endif()
 endif()
 
-target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic -ftree-vectorize)
+target_compile_options(btop PRIVATE -Wall -Wextra -Wpedantic)
 
 if(BTOP_PEDANTIC)
   target_compile_options(btop PRIVATE
@@ -146,7 +145,7 @@ endif()
 target_compile_definitions(btop PRIVATE
   FMT_HEADER_ONLY
   _FILE_OFFSET_BITS=64
-  $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_ENABLE_ASSERTIONS=1>
+  $<$<CONFIG:Debug>:_GLIBCXX_ASSERTIONS _LIBCPP_HARDENING_MODE=_LIBCPP_HARDENING_MODE_DEBUG>
 )
 
 target_include_directories(btop SYSTEM PRIVATE include)
@@ -187,10 +186,6 @@ if(LINUX AND BTOP_GPU)
   if(NOT BTOP_STATIC)
     target_link_libraries(btop ${CMAKE_DL_LIBS})
   endif()
-endif()
-
-if(BTOP_USE_MOLD)
-  target_link_options(btop PRIVATE -fuse-ld=mold)
 endif()
 
 if(BTOP_STATIC)
