@@ -139,7 +139,9 @@ namespace Gpu {
 				 temp_info = true,
 				 mem_total = true,
 				 mem_used = true,
-				 pcie_txrx = true;
+				 pcie_txrx = true,
+				 encoder_utilization = true,
+				 decoder_utilization = true;
 	};
 
 	//* Per-device container for GPU info
@@ -165,6 +167,9 @@ namespace Gpu {
 
 		long long pcie_tx = 0; // KB/s
 		long long pcie_rx = 0;
+
+		long long encoder_utilization = 0;
+		long long decoder_utilization = 0;
 
 		gpu_info_supported supported_functions;
 
@@ -194,7 +199,7 @@ namespace Gpu {
 namespace Cpu {
 	extern string box;
 	extern int x, y, width, height, min_width, min_height;
-	extern bool shown, redraw, got_sensors, cpu_temp_only, has_battery;
+	extern bool shown, redraw, got_sensors, cpu_temp_only, has_battery, supports_watts;
 	extern string cpuName, cpuHz;
 	extern vector<string> available_fields;
 	extern vector<string> available_sensors;
@@ -218,6 +223,7 @@ namespace Cpu {
 		vector<deque<long long>> temp;
 		long long temp_max = 0;
 		array<double, 3> load_avg;
+		float usage_watts = 0;
 	};
 
 	//* Collect cpu stats and temperatures
