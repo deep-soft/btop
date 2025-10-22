@@ -150,7 +150,9 @@ namespace Config {
 		{"base_10_sizes",		"#* Use base 10 for bits/bytes sizes, KB = 1000 instead of KiB = 1024."},
 
 		{"show_cpu_freq", 		"#* Show CPU frequency."},
-
+	#ifdef __linux__
+		{"freq_mode",				"#* How to calculate CPU frequency, available values: \"first\", \"range\", \"lowest\", \"highest\" and \"average\"."},
+	#endif
 		{"clock_format", 		"#* Draw a clock at top of screen, formatting according to strftime, empty string to disable.\n"
 								"#* Special formatting: /host = hostname | /user = username | /uptime = system uptime"},
 
@@ -217,6 +219,7 @@ namespace Config {
 		{"rsmi_measure_pcie_speeds",
 								"#* Measure PCIe throughput on AMD cards, may impact performance on certain cards."},
 		{"gpu_mirror_graph",	"#* Horizontally mirror the GPU graph."},
+		{"shown_gpus",			"#* Set which GPU vendors to show. Available values are \"nvidia amd intel\""},
 		{"custom_gpu_name0",	"#* Custom gpu0 model name, empty string to disable."},
 		{"custom_gpu_name1",	"#* Custom gpu1 model name, empty string to disable."},
 		{"custom_gpu_name2",	"#* Custom gpu2 model name, empty string to disable."},
@@ -243,6 +246,9 @@ namespace Config {
 		{"selected_battery", "Auto"},
 		{"cpu_core_map", ""},
 		{"temp_scale", "celsius"},
+	#ifdef __linux__
+		{"freq_mode", "first"},
+	#endif
 		{"clock_format", "%X"},
 		{"custom_cpu_name", ""},
 		{"disks_filter", ""},
@@ -260,7 +266,8 @@ namespace Config {
 		{"custom_gpu_name3", ""},
 		{"custom_gpu_name4", ""},
 		{"custom_gpu_name5", ""},
-		{"show_gpu_info", "Auto"}
+		{"show_gpu_info", "Auto"},
+		{"shown_gpus", "nvidia amd intel"}
 	#endif
 	};
 	std::unordered_map<std::string_view, string> stringsTmp;

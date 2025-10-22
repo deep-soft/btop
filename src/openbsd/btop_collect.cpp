@@ -214,8 +214,7 @@ namespace Cpu {
 		return trim_name(string(buffer));
 	}
 
-	int64_t get_sensor(string device, sensor_type type, int num) {
-		int64_t temp = -1;
+	int64_t get_sensor(string device, vector<sensor_type> types, int num) {
 		struct sensordev sensordev;
 		struct sensor sensor;
 		size_t sdlen, slen;
@@ -233,25 +232,26 @@ namespace Cpu {
 					break;
 			}
 			if (strstr(sensordev.xname, device.c_str())) {
-				mib[3] = type;
 				mib[4] = num;
-				if (sysctl(mib, 5, &sensor, &slen, NULL, 0) == -1) {
-					if (errno != ENOENT) {
-						Logger::warning("sysctl");
-						continue;
-					}
+				for (sensor_type type : types) {
+					mib[3] = type;
+					if (sysctl(mib, 5, &sensor, &slen, NULL, 0) == -1) {
+						if (errno != ENOENT) {
+							Logger::warning("sysctl");
+							continue;
+						}
+					} else
+						return sensor.value;
 				}
-				temp = sensor.value;
-			 	break;
 			}
 		}
-		return temp;
+		return -1;
 	}
 
 	bool get_sensors() {
 		got_sensors = false;
 		if (Config::getB("show_coretemp") and Config::getB("check_temp")) {
-			if (get_sensor(string("cpu0") , SENSOR_TEMP, 0) > 0) {
+			if (get_sensor(string("cpu0"), { SENSOR_TEMP }, 0) > 0) {
 				got_sensors = true;
 				current_cpu.temp_max = 100; // we don't have this info
 			} else {
@@ -267,7 +267,7 @@ namespace Cpu {
 		int temp = 0;
 		int p_temp = 0;
 
-		temp = get_sensor(string("cpu0"), SENSOR_TEMP, 0);
+		temp = get_sensor(string("cpu0"), { SENSOR_TEMP }, 0);
 		if (temp > -1) {
 			temp = MUKTOC(temp);
 			p_temp = temp;
@@ -343,17 +343,23 @@ namespace Cpu {
 
 		long seconds = -1;
 		uint32_t percent = -1;
+		float rate = -1.0f;
 		string status = "discharging";
-		int64_t full, remaining;
-		full = get_sensor("acpibat0", SENSOR_AMPHOUR, 0);
-		remaining = get_sensor("acpibat0", SENSOR_AMPHOUR, 3);
-		int64_t state = get_sensor("acpibat0", SENSOR_INTEGER, 0);
+		int64_t full, remaining, watts;
+		full = get_sensor("acpibat0", { SENSOR_AMPHOUR, SENSOR_WATTHOUR }, 0);
+		remaining = get_sensor("acpibat0", { SENSOR_AMPHOUR, SENSOR_WATTHOUR }, 3);
+		watts = get_sensor("acpibat0", { SENSOR_WATTS }, 0);
+		int64_t state = get_sensor("acpibat0", { SENSOR_INTEGER }, 0);
 		if (full < 0) {
 			has_battery = false;
 			Logger::warning("failed to get battery");
 		} else {
 			float_t f = full / 1000;
 			float_t r = remaining / 1000;
+			if (watts > 0) {
+				supports_watts = true;
+				rate = watts / 1000000.0f; // watts is given in µW
+			}
 			has_battery = true;
 			percent = r / f * 100;
 			if (percent == 100) {
@@ -370,7 +376,7 @@ namespace Cpu {
 			}
 		}
 
-		return {percent, -1, seconds, status};
+		return {percent, rate, seconds, status};
 	}
 
 	auto collect(bool no_update) -> cpu_info & {
@@ -954,7 +960,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1;
+	int collapse = -1, expand = -1, toggle_children = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
@@ -1161,6 +1167,23 @@ namespace Proc {
 		//* Generate tree view if enabled
 		if (tree and (not no_update or should_filter or sorted_change)) {
 			bool locate_selection = false;
+
+			if (toggle_children != -1) {
+				auto collapser = rng::find(current_procs, toggle_children, &proc_info::pid);
+				if (collapser != current_procs.end()){
+					for (auto& p : current_procs) {
+						if (p.ppid == collapser->pid) {
+							auto child = rng::find(current_procs, p.pid, &proc_info::pid);
+							if (child != current_procs.end()){
+								child->collapsed = not child->collapsed;
+							}
+						}
+					}
+					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+				}
+				toggle_children = -1;
+			}
+			
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {

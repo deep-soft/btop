@@ -34,7 +34,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - {runner: 'macos-13', version: 'Ventura'}
+         # - {runner: 'macos-13', version: 'Ventura'}
           - {runner: 'macos-14', version: 'Sonoma'}
           - {runner: 'macos-15', version: 'Sequoia'}
     runs-on: ${{ matrix.os.runner }}
@@ -49,16 +49,16 @@ jobs:
         run: |
           export HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK=1
           brew update --quiet
-          brew install --force --overwrite llvm lld lowdown
+          brew install --force --overwrite gcc@15 lowdown
 
       - name: Compile
         run: |
-          make CXX=$(brew --prefix llvm)/bin/clang++ ARCH=x86_64 STATIC=true STRIP=true
+          make CXX=$(brew --prefix)/bin/g++-15
           GIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
-          mv bin/btop bin/btop-x86_64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
+          mv bin/btop bin/btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}-$GIT_HASH
           ls -alh bin
 
       - uses: actions/upload-artifact@v4
         with:
-          name: btop-x86_64-${{ matrix.os.runner }}-${{ matrix.os.version }}
+          name: btop-arm64-${{ matrix.os.runner }}-${{ matrix.os.version }}
           path: 'bin/*'

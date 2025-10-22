@@ -93,10 +93,10 @@ long long get_monotonicTimeUSec()
 namespace Cpu {
 	vector<long long> core_old_totals;
 	vector<long long> core_old_idles;
+	vector<fs::path> core_freq;
 	vector<string> available_fields = {"Auto", "total"};
 	vector<string> available_sensors = {"Auto"};
 	cpu_info current_cpu;
-	fs::path freq_path = "/sys/devices/system/cpu/cpufreq/policy0/scaling_cur_freq";
 	bool got_sensors{};
 	bool cpu_temp_only{};
 	bool supports_watts = true;
@@ -289,11 +289,18 @@ namespace Shared {
 		}
 
 		//? Init for namespace Cpu
-		if (not fs::exists(Cpu::freq_path) or access(Cpu::freq_path.c_str(), R_OK) == -1) Cpu::freq_path.clear();
 		Cpu::current_cpu.core_percent.insert(Cpu::current_cpu.core_percent.begin(), Shared::coreCount, {});
 		Cpu::current_cpu.temp.insert(Cpu::current_cpu.temp.begin(), Shared::coreCount + 1, {});
 		Cpu::core_old_totals.insert(Cpu::core_old_totals.begin(), Shared::coreCount, 0);
 		Cpu::core_old_idles.insert(Cpu::core_old_idles.begin(), Shared::coreCount, 0);
+
+		for (int i = 0; i < Shared::coreCount; ++i) {
+			Cpu::core_freq.push_back("/sys/devices/system/cpu/cpufreq/policy" + to_string(i) + "/scaling_cur_freq");
+			if (not fs::exists(Cpu::core_freq.back()) or access(Cpu::core_freq.back().c_str(), R_OK) == -1) {
+				Cpu::core_freq.pop_back();
+			}
+		}
+
 		Cpu::collect();
 		if (Runner::coreNum_reset) Runner::coreNum_reset = false;
 		for (auto& [field, vec] : Cpu::current_cpu.cpu_percent) {
@@ -308,9 +315,19 @@ namespace Shared {
 
 		//? Init for namespace Gpu
 	#ifdef GPU_SUPPORT
-		Gpu::Nvml::init();
-		Gpu::Rsmi::init();
-		Gpu::Intel::init();
+		auto shown_gpus = Config::getS("shown_gpus");
+		if (s_contains(shown_gpus, "nvidia")) {
+		    Gpu::Nvml::init();
+		}
+
+		if (s_contains(shown_gpus, "amd")) {
+			Gpu::Rsmi::init();
+		}
+
+		if (s_contains(shown_gpus, "intel")) {
+			Gpu::Intel::init();
+		}
+
 		if (not Gpu::gpu_names.empty()) {
 			for (auto const& [key, _] : Gpu::gpus[0].gpu_percent)
 				Cpu::available_fields.push_back(key);
@@ -552,6 +569,26 @@ namespace Cpu {
 		}
 	}
 
+	static string normalize_frequency(double hz) {
+		string str;
+		if (hz > 999999) {
+			str = fmt::format("{:.1f}", hz / 1'000'000);
+			str.resize(3);
+			if (str.back() == '.') str.pop_back();
+			str += " THz";
+		}
+		else if (hz > 999) {
+			str = fmt::format("{:.1f}", hz / 1'000);
+			str.resize(3);
+			if (str.back() == '.') str.pop_back();
+			str += " GHz";
+		}
+		else {
+			str = fmt::format("{:.0f} MHz", hz);
+		}
+		return str;
+	}
+
 	string get_cpuHz() {
 		static int failed{};
 
@@ -559,20 +596,60 @@ namespace Cpu {
 			return ""s;
 
 		string cpuhz;
+
+		const auto &freq_mode = Config::getS("freq_mode");
+
 		try {
-			double hz{};
-			//? Try to get freq from /sys/devices/system/cpu/cpufreq/policy first (faster)
-			if (not freq_path.empty()) {
-				hz = stod(readfile(freq_path, "0.0")) / 1000;
-				if (hz <= 0.0 and ++failed >= 2)
-					freq_path.clear();
+			double hz = 0.0;
+			// Read frequencies from all CPU cores
+			vector<double> frequencies;
+			for (auto it = Cpu::core_freq.begin(); it != Cpu::core_freq.end(); ) {
+    			if (it->empty()) {
+        			it = Cpu::core_freq.erase(it);
+        			continue;
+    			}
+
+    			double core_hz = stod(readfile(*it, "0.0")) / 1000;
+    			if (core_hz <= 0.0 and ++failed >= 2) {
+        			it = Cpu::core_freq.erase(it);
+    			} else {
+        			frequencies.push_back(core_hz);
+        			if (freq_mode == "first") break;
+        			++it;
+    			}
+ 			}
+
+			if (not frequencies.empty()) {
+				if (freq_mode == "first") {
+					hz = frequencies.front();
+				}
+				if (freq_mode == "average") {
+					hz = std::accumulate(frequencies.begin(), frequencies.end(), 0.0) / static_cast<double>(frequencies.size());
+				}
+				else if (freq_mode == "highest") {
+					hz = *std::max_element(frequencies.begin(), frequencies.end());
+				}
+				else if (freq_mode == "lowest") {
+					hz = *std::min_element(frequencies.begin(), frequencies.end());
+				}
+				else if (freq_mode == "range") {
+					auto [min_hz,max_hz] = std::minmax_element(frequencies.begin(), frequencies.end());
+
+					// Format as range
+					string min_str, max_str;
+					min_str = normalize_frequency(*min_hz);
+					max_str = normalize_frequency(*max_hz);
+
+					return min_str + " - " + max_str;
+				}
 			}
 			//? If freq from /sys failed or is missing try to use /proc/cpuinfo
 			if (hz <= 0.0) {
 				ifstream cpufreq(Shared::procPath / "cpuinfo");
 				if (cpufreq.good()) {
 					while (cpufreq.ignore(SSmax, '\n')) {
-						if (cpufreq.peek() == 'c') {
+						// peek is caps sensitive so it was skipping 'CPU MHz'. This aims to fix it.
+						if (cpufreq.peek() == 'c' || cpufreq.peek() == 'C') {
 							cpufreq.ignore(SSmax, ' ');
 							if (cpufreq.peek() == 'M') {
 								cpufreq.ignore(SSmax, ':');
@@ -588,21 +665,7 @@ namespace Cpu {
 			if (hz <= 1 or hz >= 999999999)
 				throw std::runtime_error("Failed to read /sys/devices/system/cpu/cpufreq/policy and /proc/cpuinfo.");
 
-			if (hz > 999999) {
-				cpuhz = fmt::format("{:.1f}", hz / 1'000'000);
-				cpuhz.resize(3);
-				if (cpuhz.back() == '.') cpuhz.pop_back();
-				cpuhz += " THz";
-			}
-			else if (hz > 999) {
-				cpuhz = fmt::format("{:.1f}", hz / 1'000);
-				cpuhz.resize(3);
-				if (cpuhz.back() == '.') cpuhz.pop_back();
-				cpuhz += " GHz";
-			}
-			else {
-				cpuhz = fmt::format("{:.0f} MHz", hz);
-			}
+			cpuhz = normalize_frequency(hz);
 
 		}
 		catch (const std::exception& e) {
@@ -841,13 +904,13 @@ namespace Cpu {
 				catch (const std::invalid_argument&) { }
 				catch (const std::out_of_range&) { }
 			}
-		} 
+		}
 		//? Or get seconds to full
 		else if(is_in(status, "charging")) {
 			if (b.use_energy_or_charge ) {
 				if (not b.power_now.empty()) {
 					try {
-						seconds = (round(stod(readfile(b.energy_full , "0")) - round(stod(readfile(b.energy_now, "0"))))  
+						seconds = (round(stod(readfile(b.energy_full , "0")) - round(stod(readfile(b.energy_now, "0"))))
 									/ abs(stod(readfile(b.power_now, "1"))) * 3600);
 					}
 					catch (const std::invalid_argument&) { }
@@ -855,14 +918,14 @@ namespace Cpu {
 				}
 				else if (not b.current_now.empty()) {
 					try {
-						seconds = (round(stod(readfile(b.charge_full , "0")) - stod(readfile(b.charge_now, "0")))  
+						seconds = (round(stod(readfile(b.charge_full , "0")) - stod(readfile(b.charge_now, "0")))
 									/ std::abs(stod(readfile(b.current_now, "1"))) * 3600);
 					}
 					catch (const std::invalid_argument&) { }
 					catch (const std::out_of_range&) { }
 				}
 			}
-		} 
+		}
 
 		//? Get power draw
 		if (b.use_power) {
@@ -2067,17 +2130,15 @@ namespace Mem {
 					diskread.close();
 				}
 
-				//? Get mounts from /proc/self/mountinfo
-				diskread.open((Shared::procPath / "self/mountinfo"));
+				//? Get mounts from /etc/mtab or /proc/self/mounts
+				diskread.open((fs::exists("/etc/mtab") ? fs::path("/etc/mtab") : Shared::procPath / "self/mounts"));
 				if (diskread.good()) {
 					vector<string> found;
 					found.reserve(last_found.size());
-					string dev, major_minor, mountpoint, fstype, _;
+					string dev, mountpoint, fstype;
 					while (not diskread.eof()) {
-						// See proc_pid_mountinfo(5) for the file format
-						// We specifically want the major/minor device numbers
 						std::error_code ec;
-						diskread >> _ >> _ >> major_minor >> _ >> mountpoint >> _ >> _ >> _ >> fstype >> dev >> _;
+						diskread >> dev >> mountpoint >> fstype;
 						diskread.ignore(SSmax, '\n');
 
 						// A mountpoint can ascii escape codes, which will not work with `statvfs`.
@@ -2110,17 +2171,25 @@ namespace Mem {
 									if (mountpoint == "/mnt") disks.at(mountpoint).name = "root";
 								#endif
 								if (disks.at(mountpoint).name.empty()) disks.at(mountpoint).name = (mountpoint == "/" ? "root" : mountpoint);
-
-								// Use the major:minor device numbers to get device stats; see sysfs(5)
-								auto stat_path = "/sys/dev/block/" + major_minor + "/stat";
-								if (fs::exists(stat_path, ec) and access(stat_path.c_str(), R_OK) == 0) {
-									disks.at(mountpoint).stat = stat_path;
-								} else if (fstype == "zfs") {
+								string devname = disks.at(mountpoint).dev.filename();
+								int c = 0;
+								while (devname.size() >= 2) {
+									if (fs::exists("/sys/block/" + devname + "/stat", ec) and access(string("/sys/block/" + devname + "/stat").c_str(), R_OK) == 0) {
+										if (c > 0 and fs::exists("/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat", ec))
+											disks.at(mountpoint).stat = "/sys/block/" + devname + '/' + disks.at(mountpoint).dev.filename().string() + "/stat";
+										else
+											disks.at(mountpoint).stat = "/sys/block/" + devname + "/stat";
+										break;
 									//? Set ZFS stat filepath
-									disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
-									if (disks.at(mountpoint).stat.empty()) {
-										Logger::debug("Failed to get ZFS stat file for device " + dev);
+									} else if (fstype == "zfs") {
+										disks.at(mountpoint).stat = get_zfs_stat_file(dev, zfs_dataset_name_start, zfs_hide_datasets);
+										if (disks.at(mountpoint).stat.empty()) {
+											Logger::debug("Failed to get ZFS stat file for device " + dev);
+										}
+										break;
 									}
+									devname.resize(devname.size() - 1);
+									c++;
 								}
 							}
 
@@ -2147,7 +2216,7 @@ namespace Mem {
 					last_found = std::move(found);
 				}
 				else
-					throw std::runtime_error("Failed to get mounts from /proc/self/mountinfo");
+					throw std::runtime_error("Failed to get mounts from /etc/mtab and /proc/self/mounts");
 				diskread.close();
 
 				//? Get disk/partition stats
@@ -2666,7 +2735,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1;
+	int collapse = -1, expand = -1, toggle_children = -1;
 	uint64_t old_cputimes{};
 	atomic<int> numpids{};
 	int filter_found{};
@@ -3078,6 +3147,23 @@ namespace Proc {
 		//* Generate tree view if enabled
 		if (tree and (not no_update or should_filter or sorted_change)) {
 			bool locate_selection = false;
+
+			if (toggle_children != -1) {
+				auto collapser = rng::find(current_procs, toggle_children, &proc_info::pid);
+				if (collapser != current_procs.end()){
+					for (auto& p : current_procs) {
+						if (p.ppid == collapser->pid) {
+							auto child = rng::find(current_procs, p.pid, &proc_info::pid);
+							if (child != current_procs.end()){
+								child->collapsed = not child->collapsed;
+							}
+						}
+					}
+					if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+				}
+				toggle_children = -1;
+			}
+			
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {

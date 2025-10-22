@@ -122,7 +122,7 @@ namespace Input {
 		string key = input;
 		if (not key.empty()) {
 			//? Remove escape code prefix if present
-			if (key.substr(0, 2) == Fx::e) {
+			if (key.length() > 1 and key.at(0) == Fx::e.at(0)) {
 				key.erase(0, 1);
 			}
 			//? Detect if input is an mouse event
@@ -221,11 +221,11 @@ namespace Input {
 					Menu::show(Menu::Menus::Main);
 					return;
 				}
-				else if (is_in(key, "F1", "?", help_key)) {
+				else if (is_in(key, "f1", "?", help_key)) {
 					Menu::show(Menu::Menus::Help);
 					return;
 				}
-				else if (is_in(key, "F2", "o")) {
+				else if (is_in(key, "f2", "o")) {
 					Menu::show(Menu::Menus::Options);
 					return;
 				}
@@ -402,11 +402,12 @@ namespace Input {
 						Config::set("show_detailed", false);
 					}
 				}
-				else if (is_in(key, "+", "-", "space") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
+				else if (is_in(key, "+", "-", "space", "u") and Config::getB("proc_tree") and Config::getI("proc_selected") > 0) {
 					atomic_wait(Runner::active);
 					auto& pid = Config::getI("selected_pid");
 					if (key == "+" or key == "space") Proc::expand = pid;
 					if (key == "-" or key == "space") Proc::collapse = pid;
+					if (key == "u")	Proc::toggle_children = pid;
 					no_update = false;
 				}
 				else if (is_in(key, "t", kill_key) and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
@@ -421,6 +422,12 @@ namespace Input {
 					Menu::show(Menu::Menus::SignalChoose);
 					return;
 				}
+			    else if (key == "N" and (Config::getB("show_detailed") or Config::getI("selected_pid") > 0)) {
+					atomic_wait(Runner::active);
+				    if (Config::getB("show_detailed") and Config::getI("proc_selected") == 0 and Proc::detailed.status == "Dead") return;
+				    Menu::show(Menu::Menus::Renice);
+				    return;
+			    }
 				else if (is_in(key, "up", "down", "page_up", "page_down", "home", "end") or (vim_keys and is_in(key, "j", "k", "g", "G"))) {
 					proc_mouse_scroll:
 					redraw = false;

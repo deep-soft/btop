@@ -349,7 +349,7 @@ namespace Proc {
 	extern bool shown, redraw;
 	extern int select_max;
 	extern atomic<int> detailed_pid;
-	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth;
+	extern int selected_pid, start, selected, collapse, expand, filter_found, selected_depth, toggle_children;
 	extern string selected_name;
 
 	//? Contains the valid sorting options for processes
@@ -430,6 +430,9 @@ namespace Proc {
 		std::reference_wrapper<proc_info> entry;
 		vector<tree_proc> children;
 	};
+
+	//* Change priority (nice) of pid, returns true on success otherwise false
+	bool set_priority(pid_t pid, int priority);
 
 	//* Sort vector of proc_info's
 	void proc_sorter(vector<proc_info>& proc_vec, const string& sorting, bool reverse, bool tree = false);
