@@ -1,53 +1,48 @@
-name: NetBSD CMake
+name: OpenBSD CMake
 
 on:
   push:
     branches: main
     tags-ignore: '*.*'
     paths:
-      - '.github/workflows/cmake-netbsd.yml'
+      - '.github/workflows/cmake-openbsd.yml'
       - 'CMakeLists.txt'
       - 'cmake/**'
       - 'include/**'
       - 'src/*pp'
-      - 'src/netbsd/*pp'
+      - 'src/openbsd/*pp'
   pull_request:
     branches: main
     paths:
-      - '.github/workflows/cmake-netbsd.yml'
+      - '.github/workflows/cmake-openbsd.yml'
       - 'CMakeLists.txt'
       - 'cmake/**'
       - 'include/**'
       - 'src/*pp'
-      - 'src/netbsd/*pp'
+      - 'src/openbsd/*pp'
 
 jobs:
   build:
-    name: netbsd-${{ matrix.version }}-${{ matrix.arch }}
+    name: openbsd-${{ matrix.version}}-${{ matrix.arch}}
     runs-on: ubuntu-24.04
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ matrix.arch }}-${{ matrix.version }}
       cancel-in-progress: true
     strategy:
       matrix:
-        arch: ['aarch64', 'amd64']
-        version: ['10.1']
+        arch: ['aarch64', 'x86_64']
+        version: ['7.8']
     steps:
       - uses: actions/checkout@v5
 
       - name: Compile
-        uses: vmactions/netbsd-vm@v1
+        uses: vmactions/openbsd-vm@v1
         with:
           arch: ${{ matrix.arch }}
           release: ${{ matrix.version }}
           usesh: true
-          prepare: |
-            export PATH="/usr/pkg/sbin:/usr/pkg/bin:$PATH"
-            export PKG_PATH="https://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/${{ matrix.arch }}/${{ matrix.version }}/All/"
-            /usr/sbin/pkg_add pkgin
-            pkgin -y install cmake gcc14 git ninja-build
+          prepare: pkg_add cmake git ninja
           run: |
-            export CXX="/usr/pkg/gcc14/bin/g++"
             cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
             cmake --build build --verbose
             ctest --test-dir build
