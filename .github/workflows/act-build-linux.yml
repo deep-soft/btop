@@ -1,5 +1,5 @@
 # act-build-linux.yml
-name: act-Linux
+name: act- Linux
 
 env:
    TAG_NAME:      "btop"
@@ -43,14 +43,14 @@ jobs:
       fail-fast: false
       matrix:
         build: [
-          - aarch64-linux-musl
-          - armv7-linux-musleabi
-          - x86_64-linux-musl
+          aarch64-linux-musl,
+          armv7-linux-musleabi,
+          x86_64-linux-musl,
         ]
         include:
-          - { build: aarch64-linux-musl,   arch: aarch64-linux-musl,   toolchain: aarch64-unknown-linux-musl }
+          - { build: aarch64-linux-musl,   arch: aarch64-linux-musl,   toolchain: aarch64-unknown-linux-musl   }
           - { build: armv7-linux-musleabi, arch: armv7-linux-musleabi, toolchain: armv7-unknown-linux-musleabi }
-          - { build: x86_64-linux-musl,    arch: x86_64-linux-musl,    toolchain: x86_64-unknown-linux-musl }
+          - { build: x86_64-linux-musl,    arch: x86_64-linux-musl,    toolchain: x86_64-unknown-linux-musl    }
 
     runs-on: ubuntu-24.04
 
