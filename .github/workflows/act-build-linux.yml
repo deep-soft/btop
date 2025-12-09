@@ -36,111 +36,21 @@ on:
         required: true
         default: false
 
-#  push:
-#    branches:
-#      - main
-#    tags-ignore:
-#      - '*.*'
-#    paths:
-#      - 'src/**'
-#      - '!src/osx/**'
-#      - '!src/freebsd/**'
-#      - '!src/netbsd/**'
-#      - '!src/openbsd/**'
-#      - 'include/**'
-#      - 'Makefile'
-#      - '.github/workflows/continuous-build-linux.yml'
-#  pull_request:
-#    branches:
-#      - main
-#    paths:
-#      - 'src/**'
-#      - '!src/osx/**'
-#      - '!src/freebsd/**'
-#      - '!src/netbsd/**'
-#      - '!src/openbsd/**'
-#      - 'include/**'
-#      - 'Makefile'
-#      - '.github/workflows/continuous-build-linux.yml'
-
 jobs:
   static-build:
     continue-on-error: true
     strategy:
+      fail-fast: false
       matrix:
-        toolchain:
-          - aarch64-unknown-linux-musl
-#          - arm-unknown-linux-musleabi
-#          - arm-unknown-linux-musleabihf
-          - armv7-unknown-linux-musleabi
-#          - armv7-unknown-linux-musleabihf
-#          - i586-unknown-linux-musl
-#          - i686-unknown-linux-musl
-#          - m68k-unknown-linux-musl
-#          - mips-unknown-linux-musl
-#          - mips-unknown-linux-muslsf
-#          - mips64-unknown-linux-musl
-#          - mips64el-unknown-linux-musl
-#          - mipsel-unknown-linux-musl
-#          - mipsel-unknown-linux-muslsf
-#          - powerpc-unknown-linux-musl
-#          - powerpc64-unknown-linux-musl
-#          - powerpc64le-unknown-linux-musl
-#          - powerpcle-unknown-linux-musl
-#          - riscv32-unknown-linux-musl
-#          - riscv64-unknown-linux-musl
-#          - s390x-ibm-linux-musl
-          - x86_64-unknown-linux-musl
-# was
-#          - aarch64-linux-musl
-#          - aarch64_be-linux-musl
-#          - arm-linux-musleabi
-#          - arm-linux-musleabihf
-#          - armeb-linux-musleabi
-#          - armeb-linux-musleabihf
-#          - armel-linux-musleabi
-#          - armel-linux-musleabihf
-#          - armv5l-linux-musleabi
-#          - armv5l-linux-musleabihf
-#          - armv6-linux-musleabi
-#          - armv6-linux-musleabihf
-#          - armv7l-linux-musleabihf
-#          - armv7m-linux-musleabi
-#          - armv7r-linux-musleabihf
-#          - i486-linux-musl
-#          - i686-linux-musl
-#          - m68k-linux-musl
-#          - mips-linux-musl
-#          - mips-linux-musln32sf
-#          - mips-linux-muslsf
-#          - mips64-linux-musl
-#          - mips64-linux-musln32
-#          - mips64-linux-musln32sf
-#          - mips64el-linux-musl
-#          - mips64el-linux-musln32
-#          - mips64el-linux-musln32sf
-#          - mipsel-linux-musl
-#          - mipsel-linux-musln32
-#          - mipsel-linux-musln32sf
-#          - mipsel-linux-muslsf
-#          - powerpc-linux-musl
-#          - powerpc-linux-muslsf
-#          - powerpc64-linux-musl
-#          - powerpc64le-linux-musl
-#          - powerpcle-linux-musl
-#          - powerpcle-linux-muslsf
-#          - riscv32-linux-musl
-#          - riscv64-linux-musl
-#          - s390x-linux-musl
-#          - x86_64-linux-musl
-#          - x86_64-linux-muslx32
-    # - or1k-linux-musl
-    # - sh2-linux-musl
-    # - sh2-linux-muslfdpic
-    # - sh2eb-linux-musl
-    # - sh2eb-linux-muslfdpic
-    # - sh4-linux-musl
-    # - sh4eb-linux-musl
+        build: [
+          - aarch64-linux-musl
+          - armv7-linux-musleabi
+          - x86_64-linux-musl
+        ]
+        include:
+          - { build: aarch64-linux-musl,   arch: aarch64-linux-musl,   toolchain: aarch64-unknown-linux-musl }
+          - { build: armv7-linux-musleabi, arch: armv7-linux-musleabi, toolchain: armv7-unknown-linux-musleabi }
+          - { build: x86_64-linux-musl,    arch: x86_64-linux-musl,    toolchain: x86_64-unknown-linux-musl }
 
     runs-on: ubuntu-24.04
 
@@ -196,7 +106,7 @@ jobs:
       - name: set INFO_FILE name
         shell: bash
         run: |
-          INSTALL_FOLDER=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }};
+          INSTALL_FOLDER=${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.arch }};
           echo "INSTALL_FOLDER=$INSTALL_FOLDER" >> $GITHUB_ENV
           echo "INFO_FILE=$INSTALL_FOLDER.txt" >> $GITHUB_ENV
 
@@ -246,7 +156,7 @@ jobs:
         if: ${{ inputs.upload_artifacts }}
         uses: deep-soft/upload-artifact@v4
         with:
-          name: ${{ env.PROG_NAME }}-${{ matrix.toolchain }}
+          name: ${{ env.PROG_NAME }}-${{ matrix.arch }}
           path: '.artifacts/**'
 
       - name: make install
@@ -261,7 +171,7 @@ jobs:
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
-          filename: '${{ github.workspace }}/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}'
+          filename: '${{ github.workspace }}/${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.arch }}'
           directory: ${{ env.INSTALL_FOLDER }}
           path: '.'
           env_variable: ZIP_ARC
@@ -283,7 +193,7 @@ jobs:
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
-          filename: '${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}-ALL'
+          filename: '${{ env.PROG_NAME }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.arch }}-ALL'
           directory: ${{ github.workspace }}
           path: '.'
           env_variable: ZIP_ALL
@@ -306,7 +216,7 @@ jobs:
         if: ${{ inputs.GPU_version }}
         shell: bash
         run: |
-          INSTALL_FOLDER=${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }};
+          INSTALL_FOLDER=${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.arch }};
           echo "INSTALL_FOLDER=$INSTALL_FOLDER" >> $GITHUB_ENV
           echo "INFO_FILE=$INSTALL_FOLDER.txt" >> $GITHUB_ENV
 
@@ -394,7 +304,7 @@ jobs:
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
-          filename: '${{ github.workspace }}/${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}'
+          filename: '${{ github.workspace }}/${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.arch }}'
           directory: ${{ env.INSTALL_FOLDER }}
           path: '.'
           env_variable: ZIP_ARC
@@ -418,7 +328,7 @@ jobs:
         uses: deep-soft/zip-release@v2.1
         with:
           type: 'zip'
-          filename: '${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.toolchain }}-ALL'
+          filename: '${{ env.PROG_NAME_G }}-${{ env.PROG_VERSION }}-${{ env.TAG_BUILD }}-${{ matrix.arch }}-ALL'
           directory: ${{ github.workspace }}
           path: '.'
           env_variable: ZIP_ALL
