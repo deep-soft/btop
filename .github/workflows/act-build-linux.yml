@@ -145,6 +145,14 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      - name: Install build tools
+        run: |
+          sudo apt update  -y || true;
+          sudo apt install -y gcc g++ make linux-headers || true;
+          sudo apt install -y coreutils git make tar zstd bash zip findutils || true;
+          sudo apt install -y lowdown || true;
+          cat /etc/shells || true;
+
       - name: Checkout source
         uses: deep-soft/checkout@v6
         with:
