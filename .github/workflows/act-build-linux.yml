@@ -120,23 +120,11 @@ jobs:
     # - sh4-linux-musl
     # - sh4eb-linux-musl
 
-    runs-on: ubuntu-latest
-    container: muslcc/x86_64:${{ matrix.toolchain }}
+    runs-on: ubuntu-24.04
 
     steps:
-      - name: Install build tools
-        continue-on-error: true
-        run: |
-          apk add --no-cache coreutils git make tar zstd bash zip findutils
-          cat /etc/shells
-          apk add lowdown --repository=https://dl-cdn.alpinelinux.org/alpine/v3.15/community
-
-      - name: Fix - Unsafe repository stop
-        run: |
-          git config --global --add safe.directory /__w/btop/btop
-
       - name: Checkout source
-        uses: deep-soft/checkout@v4
+        uses: deep-soft/checkout@v6
         with:
           submodules: recursive
 
@@ -193,15 +181,17 @@ jobs:
           echo "PROG_NAME:    " ${{ env.PROG_NAME    }} >> ${{ env.INFO_FILE }}
           echo "PROG_VERSION: " ${{ env.PROG_VERSION }} >> ${{ env.INFO_FILE }}
 
-      - name: Fix - Stopping at filesystem boundary
-        shell: bash
+      - name: Install cross toolchain
         run: |
-          git init # [fix Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).]
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20250929/${{ matrix.toolchain }}.tar.xz
+          wget -q -P /tmp https://github.com/cross-tools/musl-cross/releases/download/20250929/${{ matrix.toolchain }}.tar.xz.sha256
+          echo "$(cat /tmp/${{ matrix.toolchain }}.tar.xz.sha256) /tmp/${{ matrix.toolchain }}.tar.xz" | sha256sum --check --status
+          mkdir -p /opt/x-tools/
+          tar -xf /tmp/${{ matrix.toolchain }}.tar.xz -C /opt/x-tools
 
       - name: Build
-        shell: bash
-        run: |
-          make STATIC=true STRIP=true
+        run: 
+          CXX=/opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++ make STATIC=true STRIP=true
 
       - name: Make executable
         shell: bash
@@ -214,7 +204,7 @@ jobs:
           mkdir -p .artifacts
           mkdir -p .package
 
-      - name: Create binary atrifacts
+      - name: Create binary artifacts
         shell: bash
         run: |
           TOOLCHAIN=${{ matrix.toolchain }}
@@ -224,7 +214,7 @@ jobs:
 
       - name: Upload artifacts
         if: ${{ inputs.upload_artifacts }}
-        uses: deep-soft/upload-artifact@v4
+        uses: deep-soft/upload-artifact@v6
         with:
           name: ${{ env.PROG_NAME }}-${{ matrix.toolchain }}
           path: '.artifacts/**'
@@ -315,7 +305,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          make STATIC=true STRIP=true GPU_SUPPORT=true
+          CXX=/opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++ make STATIC=true STRIP=true GPU_SUPPORT=true
 
 #      - name: try build_gpu_two if build_gpu_one failed
 #        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_one.conclusion == 'failure') }}
