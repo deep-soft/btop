@@ -1,5 +1,5 @@
 # act-build-linux.yml
-name: act- Linux
+name: act-Linux
 
 env:
    TAG_NAME:      "btop"
