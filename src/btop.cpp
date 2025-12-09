@@ -49,6 +49,12 @@ tab-size = 4
 	#include <limits.h>
 #endif
 
+#ifdef __NetBSD__
+	#include <sys/param.h>
+	#include <sys/sysctl.h>
+	#include <unistd.h>
+#endif
+
 #include "btop_cli.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
@@ -517,7 +523,9 @@ namespace Runner {
 			#ifdef GPU_SUPPORT
 				//? GPU data collection
 				const bool gpu_in_cpu_panel = Gpu::gpu_names.size() > 0 and (
-					Config::getS("cpu_graph_lower").starts_with("gpu-") or Config::getS("cpu_graph_upper").starts_with("gpu-")
+					Config::getS("cpu_graph_lower").starts_with("gpu-")
+					or (Config::getS("cpu_graph_lower") == "Auto")
+					or Config::getS("cpu_graph_upper").starts_with("gpu-")
 					or (Gpu::shown == 0 and Config::getS("show_gpu_info") != "Off")
 				);
 
@@ -895,6 +903,19 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 		if(!_NSGetExecutablePath(buf, &bufsize))
 			Global::self_path = fs::path(buf).remove_filename();
 	}
+#elif __NetBSD__
+	{
+		int mib[4];
+		char buf[PATH_MAX];
+		size_t bufsize = sizeof buf;
+
+		mib[0] = CTL_KERN;
+		mib[1] = KERN_PROC_ARGS;
+		mib[2] = getpid();
+		mib[3] = KERN_PROC_PATHNAME;
+		if (sysctl(mib, 4, buf, &bufsize, NULL, 0) == 0)
+			Global::self_path = fs::path(buf).remove_filename();
+	}
 #endif
 	if (std::error_code ec; not Global::self_path.empty()) {
 		Theme::theme_dir = fs::canonical(Global::self_path / "../share/btop/themes", ec);
@@ -908,6 +929,12 @@ static auto configure_tty_mode(std::optional<bool> force_tty) {
 				break;
 			}
 		}
+	}
+
+	//? Set custom themes directory from command line if provided
+	if (cli.themes_dir.has_value()) {
+		Theme::custom_theme_dir = cli.themes_dir.value();
+		Logger::info("Using custom themes directory: " + Theme::custom_theme_dir.string());
 	}
 
 	//? Config init
