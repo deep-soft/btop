@@ -58,9 +58,9 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt update  -y || true;
-          sudo apt install -y gcc g++ make linux-headers || true;
-          sudo apt install -y coreutils git make tar zstd bash zip findutils || true;
-          sudo apt install -y lowdown || true;
+          sudo apt install make cmake gcc g++ ninja-build lowdown || true;
+          sudo apt install -y coreutils git tar zstd bash zip findutils || true;
+          sudo apt install -y linux-headers || true;
           cat /etc/shells || true;
 
       - name: Checkout source
@@ -245,7 +245,7 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          CXX=/opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++ make STATIC=true STRIP=true GPU_SUPPORT=true
+          CXX=/opt/x-tools/${{ matrix.toolchain }}/bin/${{ matrix.toolchain }}-g++ make STATIC=false STRIP=true GPU_SUPPORT=true
 
 #      - name: try build_gpu_two if build_gpu_one failed
 #        if: ${{ (github.event.inputs.GPU_version == 'true') || (matrix.steps.build_gpu_one.conclusion == 'failure') }}
