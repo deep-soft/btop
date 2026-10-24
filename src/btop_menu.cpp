@@ -20,6 +20,7 @@ tab-size = 4
 
 #include "btop_config.hpp"
 #include "btop_draw.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_theme.hpp"
 #include "btop_tools.hpp"
@@ -30,8 +31,14 @@ tab-size = 4
 #include <array>
 #include <cmath>
 #include <filesystem>
+#include <iostream>
 #include <unordered_map>
 #include <utility>
+#include <ranges>
+#include <algorithm>
+#include <iterator>
+
+#include <fmt/format.h>
 
 using std::array;
 using std::ceil;
@@ -185,7 +192,7 @@ namespace Menu {
 		{"Up, Down", "Select in process list."},
 		{"Enter", "Show detailed information for selected process."},
 		{"Spacebar", "Expand/collapse the selected process in tree view."},
-		{"u", "Expand/collapse the selected process' children."},
+		{"C", "Expand/collapse the selected process' children."},
 		{"Pg Up, Pg Down", "Jump 1 page in process list."},
 		{"Home, End", "Jump to first or last page in process list."},
 		{"Left, Right", "Select previous/next sorting column."},
@@ -195,11 +202,13 @@ namespace Menu {
 		{"a", "Toggle auto scaling for the network graphs."},
 		{"y", "Toggle synced scaling mode for network graphs."},
 		{"f, /", "To enter a process filter. Start with ! for regex."},
-		{"F", "Pause process list."},
+		{"F", "Follow selected process."},
+		{"u", "Pause process list."},
 		{"delete", "Clear any entered filter."},
 		{"c", "Toggle per-core cpu usage of processes."},
 		{"r", "Reverse sorting order in processes box."},
 		{"e", "Toggle processes tree view."},
+		{"E", "Collapse/expand all processes in tree view."},
 		{"%", "Toggles memory display mode in processes box."},
 		{"Selected +, -", "Expand/collapse the selected process in tree view."},
 		{"Selected t", "Terminate selected process with SIGTERM - 15."},
@@ -256,7 +265,18 @@ namespace Menu {
 				"Conflicting keys for",
 				"h (help) and k (kill)",
 				"is accessible while holding shift."},
-
+			{"disable_mouse",
+				"Disable all mouse events."},
+			{"disable_presets",
+				"Disable the presets.",
+				"",
+				"\"Off\" All presets are enabled.",
+				"",
+				"\"Default\" preset is disabled.",
+				"",
+				"\"Custom\" presets are disabled.",
+				"",
+				"\"All\" presets are disabled."},
 			{"presets",
 				"Define presets for the layout of the boxes.",
 				"",
@@ -377,7 +397,17 @@ namespace Menu {
 				"\"ERROR\", \"WARNING\", \"INFO\" and \"DEBUG\".",
 				"",
 				"The level set includes all lower levels,",
-				"i.e. \"DEBUG\" will show all logging info."}
+				"i.e. \"DEBUG\" will show all logging info."},
+			{"save_config_on_exit",
+				"Save config on exit.",
+				"",
+				"Automatically save current settings to",
+				"config file on exit.",
+				"",
+				"When this is toggled from True to False",
+				"a save is immediately triggered.",
+				"This way a manual save can be done by",
+				"toggling this setting on and off again."}
 		},
 		{
 			{"cpu_bottom",
@@ -572,7 +602,8 @@ namespace Menu {
 				"Manually set which gpu vendors to show.",
 				"",
 				"Available values are",
-				"\"nvidia\", \"amd\", and \"intel\".",
+				"\"nvidia\", \"amd\", \"intel\",",
+				"and \"apple\".",
 				"Separate values with whitespace.",
 				"",
 				"A restart is required to apply changes."},
@@ -722,6 +753,12 @@ namespace Menu {
 				"\"default\", \"braille\", \"block\" or \"tty\".",
 				"",
 				"\"default\" for the general default symbol.",},
+			{"swap_upload_download",
+				"Swap the positions of the upload and download",
+				"graphs.",
+				"",
+				"This allows for a more \"intuitive\" view",
+				"with download being down, on the bottom."},
 			{"net_download",
 				"Fixed network graph download value.",
 				"",
@@ -805,6 +842,20 @@ namespace Menu {
 				"",
 				"In tree-view, include all child resources",
 				"with the parent even while expanded."},
+			{"proc_tree_auto_collapse",
+				"Auto-collapse busy parents in tree view.",
+				"",
+				"When entering tree mode, automatically",
+				"collapse any process that has this many",
+				"or more direct children.",
+				"",
+				"Useful for hiding noisy multi-process apps",
+				"like Chrome, Firefox or Electron.",
+				"",
+				"Set to 0 to disable.",
+				"",
+				"Min value: 0",
+				"Max value: 10000"},
 			{"proc_colors",
 				"Enable colors in process view.",
 				"",
@@ -844,6 +895,14 @@ namespace Menu {
 				"",
 				"Set to 'True' to filter out internal",
 				"processes started by the Linux kernel."},
+			{"proc_follow_detailed",
+				"Follow selected process with detailed view",
+				"",
+				"If set to 'True' then when opening the",
+				"detailed view, the process will be",
+				"followed in the list. Pressing enter",
+				"again will close the detailed view",
+				"and stop following the process."},
 		}
 	};
 
@@ -940,10 +999,14 @@ namespace Menu {
 	};
 
 	static int signalChoose(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static std::optional<int> s_pid;
 		static int x{};
 		static int y{};
 		static int selected_signal = -1;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
 
 		if (bg.empty()) selected_signal = -1;
 		auto& out = Global::overlay;
@@ -953,11 +1016,11 @@ namespace Menu {
 			x = Term::width/2 - 40;
 			y = Term::height/2 - 9;
 			bg = Draw::createBox(x + 2, y, 78, 19, Theme::c("hi_fg"), true, "signals");
-			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Send signal to PID " + to_string(s_pid) + " ("
+			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Send signal to PID " + to_string(s_pid.value()) + " ("
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 30) + ")", 76);
 		}
 		else if (is_in(key, "escape", "q")) {
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.starts_with("button_")) {
 			if (int new_select = stoi(key.substr(7)); new_select == selected_signal)
@@ -972,11 +1035,11 @@ namespace Menu {
 				signalKillRet = ESRCH;
 				menuMask.set(SignalReturn);
 			}
-			else if (kill(s_pid, selected_signal) != 0) {
+			else if (kill(s_pid.value(), selected_signal) != 0) {
 				signalKillRet = errno;
 				menuMask.set(SignalReturn);
 			}
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.size() == 1 and isdigit(key.at(0)) and selected_signal < 10) {
 			selected_signal = std::min(std::stoi((selected_signal < 1 ? key : to_string(selected_signal) + key)), 64);
@@ -1045,6 +1108,10 @@ namespace Menu {
 		}
 
 		return (redraw ? Changed : retval);
+
+		MenuClosing:
+			s_pid.reset();
+			return Closed;
 	}
 
 	static int sizeError(const string& key) {
@@ -1070,8 +1137,12 @@ namespace Menu {
 	}
 
 	static int signalSend(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
-		if (s_pid == 0) return Closed;
+		static std::optional<int> s_pid;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
+
 		if (redraw) {
 			atomic_wait(Runner::active);
 			auto& p_name = (s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name"));
@@ -1079,7 +1150,7 @@ namespace Menu {
 				Fx::b + Theme::c("main_fg") + "Send signal: " + Fx::ub + Theme::c("hi_fg") + to_string(signalToSend)
 				+ (signalToSend > 0 and signalToSend <= 32 ? Theme::c("main_fg") + " (" + P_Signals.at(signalToSend) + ')' : ""),
 
-				Fx::b + Theme::c("main_fg") + "To PID: " + Fx::ub + Theme::c("hi_fg") + to_string(s_pid) + Theme::c("main_fg") + " ("
+				Fx::b + Theme::c("main_fg") + "To PID: " + Fx::ub + Theme::c("hi_fg") + to_string(s_pid.value()) + Theme::c("main_fg") + " ("
 				+ uresize(p_name, 16) + ')' + Fx::reset,
 			};
 			messageBox = Menu::msgBox{50, 1, cont_vec, (signalToSend > 1 and signalToSend <= 32 and signalToSend != 17 ? P_Signals.at(signalToSend) : "signal")};
@@ -1088,16 +1159,16 @@ namespace Menu {
 		auto ret = messageBox.input(key);
 		if (ret == msgBox::Ok_Yes) {
 			signalKillRet = 0;
-			if (kill(s_pid, signalToSend) != 0) {
+			if (kill(s_pid.value(), signalToSend) != 0) {
 				signalKillRet = errno;
 				menuMask.set(SignalReturn);
 			}
 			messageBox.clear();
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (ret == msgBox::No_Esc) {
 			messageBox.clear();
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (ret == msgBox::Select) {
 			Global::overlay = messageBox();
@@ -1107,6 +1178,10 @@ namespace Menu {
 			return Changed;
 		}
 		return NoChange;
+
+		MenuClosing:
+			s_pid.reset();
+			return Closed;
 	}
 
 	static int signalReturn(const string& key) {
@@ -1255,6 +1330,7 @@ static int optionsMenu(const string& key) {
 			{"cpu_sensor", std::cref(Cpu::available_sensors)},
 			{"selected_battery", std::cref(Config::available_batteries)},
 	        {"base_10_bitrate", std::cref(Config::base_10_bitrate_values)},
+			{"disable_presets", std::cref(Config::disable_preset_options)},
 		#ifdef GPU_SUPPORT
 			{"show_gpu_info", std::cref(Config::show_gpu_values)},
 			{"graph_symbol_gpu", std::cref(Config::valid_graph_symbols_def)},
@@ -1286,7 +1362,7 @@ static int optionsMenu(const string& key) {
 			height = min(Term::height - 7, max_items * 2 + 4);
 			if (height % 2 != 0) height--;
 			bg 	= Draw::banner_gen(y, 0, true)
-				+ Draw::createBox(x, y + 6, 78, height, Theme::c("hi_fg"), true, "tab" + Symbols::right)
+				+ Draw::createBox(x, y + 6, 78, height, Theme::c("hi_fg"), true, fmt::format("{}tab{}", Theme::c("hi_fg"), Theme::c("main_fg")) + Symbols::right)
 				+ Mv::to(y+8, x) + Theme::c("hi_fg") + Symbols::div_left + Theme::c("div_line") + Symbols::h_line * 29
 				+ Symbols::div_up + Symbols::h_line * (78 - 32) + Theme::c("hi_fg") + Symbols::div_right
 				+ Mv::to(y+6+height - 1, x+30) + Symbols::div_down + Theme::c("div_line");
@@ -1314,7 +1390,8 @@ static int optionsMenu(const string& key) {
 						screen_redraw = true;
 					else if (is_in(option, "shown_boxes", "presets")) {
 						screen_redraw = true;
-						Config::current_preset = -1;
+						atomic_wait(Runner::active);
+						Config::current_preset.reset();
 					}
 					else if (option == "clock_format") {
 						Draw::update_clock(true);
@@ -1419,13 +1496,19 @@ static int optionsMenu(const string& key) {
 			else if (selPred.test(isBool)) {
 				Config::flip(option);
 				screen_redraw = true;
+
+				// Special handling for options that need additional action.
 				if (option == "truecolor") {
 					theme_refresh = true;
 					Config::flip("lowcolor");
 				}
+			#if !defined(__APPLE__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
+				else if (option == "force_tty" and not Term::current_tty.starts_with("/dev/tty")) {
+			#else
 				else if (option == "force_tty") {
+			#endif
 					theme_refresh = true;
-					Config::flip("tty_mode");
+					Config::set("tty_mode", Config::getB("force_tty"));
 				}
 				else if (is_in(option, "rounded_corners", "theme_background"))
 					theme_refresh = true;
@@ -1435,26 +1518,68 @@ static int optionsMenu(const string& key) {
 				else if (option == "base_10_sizes") {
 					recollect = true;
 				}
+				else if (option == "save_config_on_exit" and not Config::getB("save_config_on_exit")) {
+					const bool old_write_new = Config::write_new;
+					Config::write_new = true;
+					Config::write();
+					Config::write_new = old_write_new;
+				}
+				else if (option == "disable_mouse") {
+					const auto is_mouse_enabled = !Config::getB("disable_mouse");
+					std::cout << (is_mouse_enabled ? Term::mouse_on : Term::mouse_off) << std::flush;
+				}
 			}
 			else if (selPred.test(isBrowsable)) {
 				auto& optList = optionsList.at(option).get();
-				int i = v_index(optList, Config::getS(option));
+				int i = -1;
+				if (option == "color_theme") {
+					const auto current_theme = Config::getS(option);
+					const auto it = std::ranges::find_if(optList, [&](const auto& p) {
+						return (p == current_theme or fs::path(p).filename().string() == current_theme);
+					});
+					if (it != optList.end()) i = std::distance(optList.begin(), it);
+					else i = optList.size();
+				}
+				else {
+					i = v_index(optList, Config::getS(option));
+				}
 
 				if ((key == "right" or (vim_keys and key == "l")) and ++i >= (int)optList.size()) i = 0;
 				else if ((key == "left" or (vim_keys and key == "h")) and --i < 0) i = optList.size() - 1;
-				Config::set(option, optList.at(i));
 
-				if (option == "color_theme")
+				if (option == "color_theme") {
+					const auto theme_path = fs::path(optList.at(i));
+					const auto theme_filename = theme_path.filename().string();
+
+					//? Check if the selected theme is the first one that matches this filename (handling shadowing)
+					const auto first_match = std::ranges::find_if(optList, [&](const string& p) {
+						return fs::path(p).filename().string() == theme_filename;
+					});
+
+					if (first_match != optList.end() and *first_match == optList.at(i))
+						Config::set(option, theme_filename);
+					else
+						Config::set(option, theme_path.string());
+
 					theme_refresh = true;
-				else if (option == "log_level") {
-					Logger::set(optList.at(i));
-					Logger::info("Logger set to " + optList.at(i));
 				}
-				else if (option == "base_10_bitrate") {
-				    recollect = true;
+				else {
+					Config::set(option, optList.at(i));
+
+					if (option == "log_level") {
+						Logger::set_log_level(optList.at(i));
+						Logger::info("Logger set to {}", optList.at(i));
+					}
+					else if (option == "base_10_bitrate") {
+						recollect = true;
+					}
+					else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
+						screen_redraw = true;
+					else if (option == "disable_presets" and optList.at(i) != "Off") {
+						atomic_wait(Runner::active);
+						Config::current_preset.reset();
+					}
 				}
-				else if (is_in(option, "proc_sorting", "cpu_sensor", "show_gpu_info") or option.starts_with("graph_symbol") or option.starts_with("cpu_graph_"))
-					screen_redraw = true;
 			}
 			else
 				retval = NoChange;
@@ -1477,25 +1602,23 @@ static int optionsMenu(const string& key) {
 			}
 
 			//? Get variable properties for currently selected option
-			if (selPred.none() or last_sel != (selected_cat << 8) + selected) {
-				selPred.reset();
-				last_sel = (selected_cat << 8) + selected;
-				const auto& selOption = categories[selected_cat][item_height * page + selected][0];
-				if (Config::ints.contains(selOption))
-					selPred.set(isInt);
-				else if (Config::bools.contains(selOption))
-					selPred.set(isBool);
-				else
-					selPred.set(isString);
+			selPred.reset();
+			last_sel = (selected_cat << 8) + selected;
+			const auto& selOption = categories[selected_cat][item_height * page + selected][0];
+			if (Config::ints.contains(selOption))
+				selPred.set(isInt);
+			else if (Config::bools.contains(selOption))
+				selPred.set(isBool);
+			else
+				selPred.set(isString);
 
-				if (not selPred.test(isString))
-					selPred.set(is2D);
-				else if (optionsList.contains(selOption)) {
-					selPred.set(isBrowsable);
-				}
-				if (not selPred.test(isBrowsable) and (selPred.test(isString) or selPred.test(isInt)))
-					selPred.set(isEditable);
+			if (not selPred.test(isString))
+				selPred.set(is2D);
+			else if (optionsList.contains(selOption)) {
+				selPred.set(isBrowsable);
 			}
+			if (not selPred.test(isBrowsable) and (selPred.test(isString) or selPred.test(isInt)))
+				selPred.set(isEditable);
 
 			//? Category buttons
 			out += Mv::to(y+7, x+4);
@@ -1512,8 +1635,20 @@ static int optionsMenu(const string& key) {
 				#else
 					+ Mv::r(10);
 				#endif
-				if (string button_name = "select_cat_" + to_string(i + 1); not editing and not mouse_mappings.contains(button_name))
-					mouse_mappings[button_name] = {y+6, x+2 + 15*i, 3, 15};
+
+#if !defined(GPU_SUPPORT)
+				constexpr static auto option_menu_tab_width = 15;
+#else
+				constexpr static auto option_menu_tab_width = 12;
+#endif
+				if (const auto button_name = fmt::format("select_cat_{}", i + 1); not editing and not mouse_mappings.contains(button_name)) {
+					mouse_mappings[button_name] = {
+						.line = y + 6,
+						.col = x + 2 + (option_menu_tab_width * i),
+						.height = 3,
+						.width = option_menu_tab_width,
+					};
+				}
 				i++;
 			}
 			if (pages > 1) {
@@ -1526,11 +1661,31 @@ static int optionsMenu(const string& key) {
 				const auto& option = categories[selected_cat][i][0];
 				const auto& value = (option == "color_theme" ? fs::path(Config::getS("color_theme")).stem().string() : Config::getAsString(option));
 
+				string idx_str;
+				if (c-1 == selected and selPred.test(isBrowsable)) {
+					const auto& optList = optionsList.at(option).get();
+					int idx = 0;
+					if (option == "color_theme") {
+						const auto current_theme = Config::getS(option);
+						const auto current_theme_path = fs::path(current_theme);
+						const auto it = std::ranges::find_if(optList, [&](const string& p) {
+							const auto p_path = fs::path(p);
+							//? Match against full path, filename, stem or legacy absolute path
+							return p == current_theme
+								or p_path.filename() == current_theme
+								or p_path.stem() == current_theme
+								or (current_theme_path.is_absolute() and current_theme_path.filename() == p_path.filename());
+						});
+						if (it != optList.end()) idx = std::distance(optList.begin(), it);
+						else idx = optList.size();
+					} else {
+						idx = v_index(optList, value);
+					}
+					idx_str = " " + to_string(idx + 1) + '/' + to_string(optList.size());
+				}
+
 				out += Mv::to(cy++, x + 1) + (c-1 == selected ? Theme::c("selected_bg") + Theme::c("selected_fg") : Theme::c("title"))
-					+ Fx::b + cjust(capitalize(s_replace(option, "_", " "))
-						+ (c-1 == selected and selPred.test(isBrowsable)
-							? ' ' + to_string(v_index(optionsList.at(option).get(), (option == "color_theme" ? Config::getS("color_theme") : value)) + 1) + '/' + to_string(optionsList.at(option).get().size())
-							: ""), 29);
+					+ Fx::b + cjust(capitalize(s_replace(option, "_", " ")) + idx_str, 29);
 				out	+= Mv::to(cy++, x + 1) + (c-1 == selected ? "" : Theme::c("main_fg")) + Fx::ub + "  "
 					+ (c-1 == selected and editing ? cjust(editor(24), 34, true) : cjust(value, 25, true)) + "  ";
 
@@ -1639,11 +1794,15 @@ static int optionsMenu(const string& key) {
 	}
 
 	static int reniceMenu(const string& key) {
-		auto s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		static std::optional<int> s_pid;
 		static int x{};
 		static int y{};
 		static int selected_nice = 0;
 		static string nice_edit;
+
+		if (!s_pid) {
+			s_pid = (Config::getB("show_detailed") and Config::getI("selected_pid") == 0 ? Config::getI("detailed_pid") : Config::getI("selected_pid"));
+		}
 
 		if (bg.empty()) {
 			selected_nice = 0;
@@ -1656,11 +1815,11 @@ static int optionsMenu(const string& key) {
 			x = Term::width/2 - 25;
 			y = Term::height/2 - 6;
 			bg = Draw::createBox(x + 2, y, 50, 13, Theme::c("hi_fg"), true, "renice");
-			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Renice PID " + to_string(s_pid) + " ("
+			bg += Mv::to(y+2, x+3) + Theme::c("title") + Fx::b + cjust("Renice PID " + to_string(s_pid.value()) + " ("
 				+ uresize((s_pid == Config::getI("detailed_pid") ? Proc::detailed.entry.name : Config::getS("selected_name")), 15) + ")", 48);
 		}
 		else if (is_in(key, "escape", "q")) {
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (is_in(key, "enter", "space")) {
 			if (s_pid > 0) {
@@ -1670,11 +1829,11 @@ static int optionsMenu(const string& key) {
 					}
 					catch (...) { selected_nice = 0; }
 				}
-				if (not Proc::set_priority(s_pid, selected_nice)) {
+				if (not Proc::set_priority(s_pid.value(), selected_nice)) {
 					// TODO: show error message
 				}
 			}
-			return Closed;
+			goto MenuClosing;
 		}
 		else if (key.size() == 1 and (isdigit(key.at(0)) or (key.at(0) == '-' and nice_edit.empty()))) {
 			nice_edit += key;
@@ -1724,6 +1883,10 @@ static int optionsMenu(const string& key) {
 		}
 
 		return (redraw ? Changed : retval);
+
+		MenuClosing:
+			s_pid.reset();
+			return Closed;
 	}
 
 	//* Add menus here and update enum Menus in header

@@ -17,17 +17,15 @@ tab-size = 4
 */
 
 #include <cmath>
-#include <codecvt>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <optional>
-#include <ranges>
 #include <sstream>
 #include <string_view>
 #include <utility>
+#include <cstdlib>
 
 #include <fcntl.h>
 #include <sys/ioctl.h>
@@ -35,6 +33,7 @@ tab-size = 4
 #include <unistd.h>
 
 #include "widechar_width.hpp"
+#include "btop_log.hpp"
 #include "btop_shared.hpp"
 #include "btop_tools.hpp"
 #include "btop_config.hpp"
@@ -49,7 +48,6 @@ using std::to_string;
 using namespace std::literals; // to use operator""s
 
 namespace fs = std::filesystem;
-namespace rng = std::ranges;
 
 //? ------------------------------------------------- NAMESPACES ------------------------------------------------------
 
@@ -167,7 +165,8 @@ namespace Term {
 				linebuffered(false);
 				refresh();
 
-				cout << alt_screen << hide_cursor << mouse_on << flush;
+				const auto is_mouse_enabled = !Config::getB("disable_mouse");
+				cout << alt_screen << hide_cursor << (is_mouse_enabled ? mouse_on : mouse_off) << flush;
 				Global::resized = false;
 			}
 		}
@@ -212,28 +211,56 @@ namespace Term {
 
 namespace Tools {
 
-	size_t wide_ulen(const std::string_view str) {
-		unsigned int chars = 0;
-		try {
-			std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-			auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).data() : str.data()));
-
-			for (auto c : w_str) {
-				chars += utf8::wcwidth(c);
-			}
+	string replace_ascii_control(string str, const char replacement) {
+		if (str.empty())
+			return str;
+		const char* str_data = &str.data()[0];
+		size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+		if (w_len <= 1)	{
+			std::ranges::for_each(str, [&replacement](char& c) { if (c < 0x20) c = replacement; });
+			return str;
 		}
-		catch (...) {
+		vector<wchar_t> w_str(w_len);
+		std::mbstowcs(&w_str[0], str_data, w_len);
+		for (size_t i = 0; i < w_str.size() - 1; i++) {
+			if (widechar_wcwidth(w_str[i]) > 1)
+				continue;
+			if (w_str[i] < 0x20)
+				w_str[i] = replacement;
+		}
+		size_t bytes = std::wcstombs(nullptr, w_str.data(), 0);
+		if (bytes == static_cast<size_t>(-1))
+			return str;
+		str.resize(bytes);
+		std::wcstombs(&str[0], &w_str[0], bytes);
+
+		return str;
+	}
+
+	size_t wide_ulen(const std::string_view str) {
+		if (str.empty())
+			return 0;
+		unsigned int chars = 0;
+
+		const char* str_data = &str.data()[0];
+			size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+		if (w_len <= 1)
 			return ulen(str);
+		vector<wchar_t> w_str(w_len);
+		std::mbstowcs(&w_str[0], str_data, w_len);
+
+		for (auto c : w_str) {
+			chars += widechar_wcwidth(c);
 		}
 
 		return chars;
 	}
 
-	size_t wide_ulen(const std::wstring_view w_str) {
+	size_t wide_ulen(const vector<wchar_t> w_str) {
 		unsigned int chars = 0;
 
 		for (auto c : w_str) {
-			chars += utf8::wcwidth(c);
+			chars += widechar_wcwidth(c);
 		}
 
 		return chars;
@@ -244,17 +271,20 @@ namespace Tools {
 			return "";
 
 		if (wide) {
-			try {
-				std::wstring_convert<std::codecvt_utf8<wchar_t>> conv;
-				auto w_str = conv.from_bytes((str.size() > 10000 ? str.substr(0, 10000).c_str() : str.c_str()));
-				while (wide_ulen(w_str) > len)
-					w_str.pop_back();
-				string n_str = conv.to_bytes(w_str);
-				return n_str;
-			}
-			catch (...) {
+			const char* str_data = &str.data()[0];
+			size_t w_len = 1 + std::mbstowcs(nullptr, str_data, 0);
+			if (w_len <= 1)
 				return uresize(str, len, false);
-			}
+			vector<wchar_t> w_str(w_len);
+			std::mbstowcs(&w_str[0], str_data, w_len);
+
+			while (wide_ulen(w_str) > len) w_str.pop_back();
+
+			string n_str;
+			n_str.resize(w_str.size());
+			std::wcstombs(&n_str[0], &w_str[0], w_str.size());
+
+			return n_str;
 		}
 		else {
 			for (size_t x = 0, i = 0; i < str.size(); i++) {
@@ -409,25 +439,25 @@ namespace Tools {
 			"bit"s, "Kib"s, "Mib"s,
 			"Gib"s, "Tib"s, "Pib"s,
 			"Eib"s, "Zib"s, "Yib"s,
-			"Bib"s, "GEb"s
+			"Rib"s, "Qib"s
 		};
 		static const array mebiUnits_byte {
 			"Byte"s, "KiB"s, "MiB"s,
 			"GiB"s, "TiB"s, "PiB"s,
 			"EiB"s, "ZiB"s, "YiB"s,
-			"BiB"s, "GEB"s
+			"RiB"s, "QiB"s
 		};
 		static const array megaUnits_bit {
-			"bit"s, "Kb"s, "Mb"s,
+			"bit"s, "kb"s, "Mb"s,
 			"Gb"s, "Tb"s, "Pb"s,
 			"Eb"s, "Zb"s, "Yb"s,
-			"Bb"s, "Gb"s
+			"Rb"s, "Qb"s
 		};
 		static const array megaUnits_byte {
-			"Byte"s, "KB"s, "MB"s,
+			"Byte"s, "kB"s, "MB"s,
 			"GB"s, "TB"s, "PB"s,
 			"EB"s, "ZB"s, "YB"s,
-			"BB"s, "GB"s
+			"RB"s, "QB"s
 		};
 		const auto& units = (bit) ? ( mega ? megaUnits_bit : mebiUnits_bit) : ( mega ? megaUnits_byte : mebiUnits_byte);
 
@@ -436,20 +466,12 @@ namespace Tools {
 		if (mega) {
 			while (value >= 100000) {
 				value /= 1000;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
 		else {
 			while (value >= 102400) {
 				value >>= 10;
-				if (value < 100) {
-					out = fmt::format("{}", value);
-					break;
-				}
 				start++;
 			}
 		}
@@ -471,16 +493,20 @@ namespace Tools {
 		}
 
 		if (shorten) {
-			auto f_pos = out.find(".");
-			if (f_pos == 1 and out.size() > 3) {
+			auto has_sep = out.find(".") != string::npos;
+			if (has_sep) {
 				out = fmt::format("{:.1f}", stod(out));
 			}
-			else if (f_pos != string::npos) {
-				out = fmt::format("{:.0f}", stod(out));
-			}
 			if (out.size() > 3) {
-				out = fmt::format("{:d}.0", out[0] - '0');
-				start++;
+				// if out is of the form xy.z
+				if (has_sep) {
+					out = fmt::format("{:.0f}", stod(out));
+				}
+				// if out is of the form xyzw (only when not using base 10)
+				else {
+					out = fmt::format("{:d}.0", out[0] - '0');
+					start++;
+				}
 			}
 			out.push_back(units[start][0]);
 		}
@@ -516,21 +542,83 @@ namespace Tools {
 	}
 
 	void atomic_wait(const atomic<bool>& atom, bool old) noexcept {
-		while (atom.load(std::memory_order_relaxed) == old ) busy_wait();
-	}
-
-	void atomic_wait_for(const atomic<bool>& atom, bool old, const uint64_t wait_ms) noexcept {
-		const uint64_t start_time = time_ms();
-		while (atom.load(std::memory_order_relaxed) == old and (time_ms() - start_time < wait_ms)) sleep_ms(1);
+		atom.wait(old, std::memory_order_acquire);
 	}
 
 	atomic_lock::atomic_lock(atomic<bool>& atom, bool wait) : atom(atom) {
-		if (wait) while (not this->atom.compare_exchange_strong(this->not_true, true));
-		else this->atom.store(true);
+		if (wait) {
+			bool expected = false;
+			while (not this->atom.compare_exchange_strong(expected, true, std::memory_order_acquire, std::memory_order_relaxed)) expected = false;
+		}
+		else this->atom.store(true, std::memory_order_release);
+		this->atom.notify_one();
 	}
 
 	atomic_lock::~atomic_lock() noexcept {
-		this->atom.store(false);
+		this->atom.store(false, std::memory_order_release);
+		this->atom.notify_one();
+	}
+
+	void atomic_waiting_lock::store(bool new_value) noexcept {
+		{
+			std::lock_guard lock {mtx};
+			value = new_value;
+		}
+		cv.notify_all();
+	}
+
+	void atomic_waiting_lock::wait(bool old) const noexcept {
+		std::unique_lock lock {mtx};
+		cv.wait(lock, [this, old] { return value != old; });
+	}
+
+	void atomic_waiting_lock::wait_for(bool old, uint64_t wait_ms) const noexcept {
+		std::unique_lock lock {mtx};
+		const auto start = uptime_micros();
+		const auto wait_us = wait_ms * 1'000ULL;
+		while (value == old) {
+			const auto elapsed = uptime_micros() - start;
+			if (elapsed >= wait_us) break;
+			cv.wait_for(lock, std::chrono::microseconds(wait_us - elapsed), [this, old] { return value != old; });
+		}
+	}
+
+	atomic_waiting_lock::guard atomic_waiting_lock::lock(bool wait) {
+		return guard(*this, wait);
+	}
+
+	atomic_waiting_lock::operator bool() const noexcept {
+		std::lock_guard lock {mtx};
+		return value;
+	}
+
+	atomic_waiting_lock::guard::guard(atomic_waiting_lock& atom, bool wait) : atom(atom) {
+		if (wait) {
+			std::unique_lock lock {this->atom.mtx};
+			this->atom.cv.wait(lock, [this] { return not this->atom.value; });
+			this->atom.value = true;
+		}
+		else {
+			std::lock_guard lock {this->atom.mtx};
+			this->atom.value = true;
+		}
+		this->atom.cv.notify_one();
+	}
+
+	atomic_waiting_lock::guard::~guard() noexcept {
+		{
+			std::lock_guard lock {this->atom.mtx};
+			this->atom.value = false;
+		}
+		this->atom.cv.notify_one();
+	}
+
+	void atomic_wait(const atomic_waiting_lock& atom, bool old) noexcept {
+		atom.wait(old);
+	}
+
+	void atomic_wait_for(const atomic_waiting_lock& atom, bool old, const uint64_t wait_ms) {
+		atom.wait_for(old, wait_ms);
 	}
 
 	string readfile(const std::filesystem::path& path, const string& fallback) {
@@ -541,7 +629,7 @@ namespace Tools {
 			for (string readstr; getline(file, readstr); out += readstr);
 		}
 		catch (const std::exception& e) {
-			Logger::error("readfile() : Exception when reading " + string{path} + " : " + e.what());
+			Logger::error("readfile() : Exception when reading {} : {}", path, e.what());
 			return fallback;
 		}
 		return (out.empty() ? fallback : out);
@@ -622,13 +710,13 @@ namespace Tools {
 		if (delayed_report)
 			report_buffer.emplace_back(report_line);
 		else
-			Logger::log_write(log_level, report_line);
+			Logger::debug("{}", report_line);
 	}
 
 	void DebugTimer::force_report() {
 		if (report_buffer.empty()) return;
 		for (const auto& line : report_buffer)
-			Logger::log_write(log_level, line);
+			Logger::debug("{}", line);
 		report_buffer.clear();
 	}
 
@@ -643,72 +731,39 @@ namespace Tools {
 	}
 }
 
-namespace Logger {
-	using namespace Tools;
-	std::atomic<bool> busy (false);
-	bool first = true;
-	const string tdf = "%Y/%m/%d (%T) | ";
+const string Fx::e = "\x1b[";		//* Escape sequence start
+const string Fx::b = e + "1m";		//* Bold on/off
+const string Fx::ub = e + "22m";	//* Bold off
+const string Fx::d = e + "2m";		//* Dark on
+const string Fx::ud = e + "22m";	//* Dark off
+const string Fx::i = e + "3m";		//* Italic on
+const string Fx::ui = e + "23m";	//* Italic off
+const string Fx::ul = e + "4m";		//* Underline on
+const string Fx::uul = e + "24m";	//* Underline off
+const string Fx::bl = e + "5m";		//* Blink on
+const string Fx::ubl = e + "25m";	//* Blink off
+const string Fx::s = e + "9m";		//* Strike/crossed-out on
+const string Fx::us = e + "29m";	//* Strike/crossed-out on/off
 
-	size_t loglevel;
-	std::optional<std::filesystem::path> logfile;
+//* Reset foreground/background color and text effects
+const string Fx::reset_base = e + "0m";
 
-	//* Wrapper for lowering privileges if using SUID bit and currently isn't using real userid
-	class lose_priv {
-		int status = -1;
-	public:
-		lose_priv() {
-			if (geteuid() != Global::real_uid) {
-				this->status = seteuid(Global::real_uid);
-			}
-		}
-		~lose_priv() noexcept {
-			if (status == 0) {
-				status = seteuid(Global::set_uid);
-			}
-		}
-		lose_priv(const lose_priv& other) = delete;
-		lose_priv& operator=(const lose_priv& other) = delete;
-		lose_priv(lose_priv&& other) = delete;
-		lose_priv& operator=(lose_priv&& other) = delete;
-	};
+//* Regex for matching color, style and cursor move escape sequences
+const std::regex Fx::escape_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m|f|s|u|C|D|A|B){1}");
 
-	void set(const string& level) {
-		loglevel = v_index(log_levels, level);
-	}
+//* Regex for matching only color and style escape sequences
+const std::regex Fx::color_regex("\033\\[\\d+;?\\d?;?\\d*;?\\d*;?\\d*(m){1}");
 
-	void log_write(const Level level, const std::string_view msg) {
-		if (loglevel < level or !logfile.has_value()) {
-			return;
-		}
-		auto& log_file = logfile.value();
-		atomic_lock lck(busy, true);
-		lose_priv neutered{};
-		std::error_code ec;
-		try {
-			// NOTE: `exist()` could throw but since we return with an empty logfile we don't care
-			if (fs::exists(log_file) and fs::file_size(log_file, ec) > 1024 << 10 and not ec) {
-				auto old_log = log_file;
-				old_log += ".1";
-
-				if (fs::exists(old_log))
-					fs::remove(old_log, ec);
-
-				if (not ec)
-					fs::rename(log_file, old_log, ec);
-			}
-			if (not ec) {
-				std::ofstream lwrite(log_file, std::ios::app);
-				if (first) {
-					first = false;
-					lwrite << "\n" << strf_time(tdf) << "===> btop++ v." << Global::Version << "\n";
-				}
-				lwrite << strf_time(tdf) << log_levels.at(level) << ": " << msg << "\n";
-			}
-			else log_file.clear();
-		}
-		catch (const std::exception& e) {
-			log_file.clear();
-			throw std::runtime_error("Exception in Logger::log_write() : " + string{e.what()});
-		}
-	}
-}
+const string Term::hide_cursor = Fx::e + "?25l";
+const string Term::show_cursor = Fx::e + "?25h";
+const string Term::alt_screen = Fx::e + "?1049h";
+const string Term::normal_screen = Fx::e + "?1049l";
+const string Term::clear = Fx::e + "2J" + Fx::e + "0;0f";
+const string Term::clear_end = Fx::e + "0J";
+const string Term::clear_begin = Fx::e + "1J";
+const string Term::mouse_on = Fx::e + "?1002h" + Fx::e + "?1015h" + Fx::e + "?1006h"; //? Enable reporting of mouse position on click and release
+const string Term::mouse_off = Fx::e + "?1002l" + Fx::e + "?1015l" + Fx::e + "?1006l";
+const string Term::mouse_direct_on = Fx::e + "?1003h"; //? Enable reporting of mouse position at any movement
+const string Term::mouse_direct_off = Fx::e + "?1003l";
+const string Term::sync_start = Fx::e + "?2026h"; //? Start of terminal synchronized output
+const string Term::sync_end = Fx::e + "?2026l"; //? End of terminal synchronized output

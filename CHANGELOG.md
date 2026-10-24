@@ -1,3 +1,83 @@
+## v1.4.7
+
+References | Description | Author(s)
+--- | --- | ---
+#1326 | Feat: Process following and following mode improvements | @vandabbin
+#1541 | feat: Add Apple Silicon GPU support via IOReport API | @gneitzke
+#1602 | feat: add Kanagawa Dragon theme | @Marcus441
+#1443 | Add twilight theme | @hastinbe
+#1433 | Add Swap upload/download speed graph option, Fix network graphs overlap | @TheSovietPancakes
+#1522 | Add Flexoki dark and light themes | @nsyout
+#1493 | Menu option to disable presets | @vandabbin
+#1492 | Create orange.theme | @neocerambyx
+#1564 | Add E hotkey to collapse/expand all processes in tree mode | @sardonyx001
+#1601 | fix: restore Apple Silicon temp reporting on M2 Pro | @RockBacon9922
+#1427 | fix regression from a switch to kIOMainPortDefault | @barracuda156
+#1429 | Fix hide and info buttons | @vandabbin
+#1452 | Fix mouse mapping for process kill buttons with vim keys enabled | @vandabbin
+#1454 | Fix kill buttons | @vandabbin
+#1456 | following mode fixes | @vandabbin
+#1458 | Fixes and Improvements for Pause and Follow modes | @vandabbin
+#1409 | fix: remove unused asprintf implementation function | @deckstose
+#1445 | fix: remove busy waiting when checking runner thread state | @deckstose
+#1491 | Update clock with preset change or show/hide box | @vandabbin
+#1521 | Tweaked RX/TX collection and drawing, Fix -Wparentheses warning | @TheSovietPancakes
+#1518 | fix: mem bottom border when net is not shown | @vandabbin
+#1515 | fix: force_tty menu option sets TTY mode on start | @vandabbin
+#1539 | fix: accumulate pwr_usage into pwr_total instead of mem_total in Gpu::collect() | @alephpiece
+#1622 | fix: read GPU/VRAM clocks when ROCm SMI reports version 1.x | @theRealWardo
+#1598 | fix: render a non-ascii chars in proc list | @deniskhud
+#1619 | fix CPU mib queries for OpenBSD, only display online CPUs in output | @busterb
+#1583 | fix: correctly map amd zen cpu core temps | @sola-contrib
+#1628 | fix: restore Intel Mac CPU temperature fallback | @seanniu93
+#1560 | fix: Use SVG features compatible with Qt SVG Tiny 1.1 | @ratijas
+ea977a0 | Update widechar detection and fix replace_ascii_control() removing wide characters | @aristocratos
+7657384 | Fix cpu watt overflow in cpu box + division by zero fix for cpu.temp_max | @aristocratos
+b36357b | Fixed missing CPU package temperature color (numeric value) | @aristocratos
+
+## v1.4.6
+
+References | Description | Author(s)
+--- | --- | ---
+#1272 | Skip 'H' and 'HX' suffix in AMD cpu name trimming | @ramdomPTM
+#1268 | feature: add process renice functionality | @goddamnparticle
+#1285 | Revert "Use /sys/dev/block/MAJOR:MINOR instead of /sys/block/NAME for disk I/O" #1270 | @deckstose
+#1277 | feat: Introduce cpu frequency display modes | @emiliopedrollo
+#1282 | Fix CPU frequency detection for LoongArch CPUs | @Twopic2
+#1275 | fix arrow keys that send 'O' instead of '[' | @vandabbin
+#1251 | OpenBSD: battery: add support for watthour and watts sensors | @shtrophic
+#1208 | Add Gotham theme | @jrebs
+#1291 | Fix macOS deadlocks and race conditions in collector threads #1292 | @kuzmeech
+#1296 | fix: btop crash on arm cpu | @emiliopedrollo @zenofile
+#984 | Added ability to set which gpu vendors to enable | @thedustinmiller
+#1274 | added tree toggle of expand/collapse for children of process | @irabrine
+#1300 | Use right key codes to match f1 and f2 keys | @vandabbin
+#1305 | Handle missing SMC gracefully on macOS | @achille
+#1309 | Fix redraw in proc list when changing sort order | @vandabbin
+#1304 | Fix load average and GPU watts leaking past box border | @vandabbin
+#1220 | feat: respect effective cpus from cgroup | @deckstose
+#1218 | feat: display container engine | @deckstose
+#1315 | feat: raise cpp standard to c++23 | @deckstose
+d0cbaf7 | Add configuration toggle for terminal synchronization | @aristocratos
+#1306 | Implement feat Process list pausing | @vandabbin
+#1322 | flip name, command, and user sorting | @vandabbin
+#1334 | fix tty theme for pause banner | @vandabbin
+#1325 | test: add test harness with ctest | @deckstose
+#1339 | fix: skip first argument of argv | @AlvaroParker
+#1357 | feat: add --themes-dir flag | @adeci
+#1359 | fix: don't over-/underflow when parsing --update argument | @yinghao-w
+#1362 | fix segfault on musl systems | @v1cont
+#1363 | Pass only static duration strings to Config::set in Config::apply_preset | @yinghao-w
+#1366 | fix: cpu per-thread totals not reaching 100% | @Tom94
+#1367 | Fix: Align boxes when Cpu bottom and Gpu on | @yinghao-w
+#1372 | Minor fixes and improvements for NetBSD | @fraggerfox
+#1377 | Fixed GPU rendering | @TheSovietPancakes
+#1379 | Fix: Always collect GPU data when cpu_graph_lower = "Auto" | @yinghao-w
+#1393 | Fix: humanized units shortening | @yinghao-w
+#1401 | Feat: add mouse dragging of scrollbar | @yinghao-w
+#1399 | feat: add cli option to dump default config | @deckstose
+e969f43 | Added "save_config_on_exit" option to configuration | @aristocratos
+
 ## v1.4.5
 
 References | Description | Author(s)

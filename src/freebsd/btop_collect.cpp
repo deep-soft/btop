@@ -61,7 +61,10 @@ tab-size = 4
 #include <utility>
 #include <unordered_set>
 
+#include <fmt/format.h>
+
 #include "../btop_config.hpp"
+#include "../btop_log.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
@@ -413,8 +416,8 @@ namespace Cpu {
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
 			} catch (const std::exception &e) {
-				Logger::error("Cpu::collect() : " + (string)e.what());
-				throw std::runtime_error("collect() : " + (string)e.what());
+				Logger::error("Cpu::collect() : {}", e.what());
+				throw std::runtime_error(fmt::format("collect() : {}", e.what()));
 			}
 
 		}
@@ -517,7 +520,7 @@ namespace Mem {
 			size_t len = 512;
 			if (fgets(poolName, len, poolPipe())) {
 				poolName[strcspn(poolName, "\n")] = 0;
-				Logger::debug("zpool found: " + string(poolName));
+				Logger::debug("zpool found: {}", poolName);
 				Mem::zpools.push_back(std::regex_replace(poolName, toReplace, "%25"));
 			}
 		}
@@ -542,7 +545,7 @@ namespace Mem {
 						devstat_compute_statistics(&d, nullptr, etime, DSM_TOTAL_BYTES_READ, &total_bytes_read, DSM_TOTAL_BYTES_WRITE, &total_bytes_write, DSM_NONE);
 						assign_values(disk, total_bytes_read, total_bytes_write);
 						string mountpoint = mapping.at(disk.dev);
-						Logger::debug("dev " + devStatName + " -> " + mountpoint  + " read=" + std::to_string(total_bytes_read) + " write=" + std::to_string(total_bytes_write));
+						Logger::debug("dev {} -> {} read={} write={}", devStatName, mountpoint, total_bytes_read, total_bytes_write);
 					}
 				}
 
@@ -627,7 +630,7 @@ namespace Mem {
 
 		if (show_swap) {
 			char buf[_POSIX2_LINE_MAX];
-			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)}; 
+			Shared::KvmPtr kd {kvm_openfiles(nullptr, _PATH_DEVNULL, nullptr, O_RDONLY, buf)};
    			struct kvm_swap swap[16];
    			int nswap = kvm_getswapinfo(kd.get(), swap, 16, 0);
 			int totalSwap = 0, usedSwap = 0;
@@ -731,7 +734,7 @@ namespace Mem {
 					continue;
 				struct statvfs vfs;
 				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-					Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
+					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
 					continue;
 				}
 				disk.total = vfs.f_blocks * vfs.f_frsize;
@@ -799,7 +802,7 @@ namespace Net {
 			IfAddrsPtr if_addrs {};
 			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
+				Logger::error("Net::collect() -> getifaddrs() failed with id {}", if_addrs.get_status());
 				redraw = true;
 				return empty_net;
 			}
@@ -834,7 +837,7 @@ namespace Net {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}
@@ -845,7 +848,7 @@ namespace Net {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
@@ -1004,7 +1007,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1, toggle_children = -1;
+	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
@@ -1042,7 +1045,7 @@ namespace Proc {
 		struct timeval currentTime;
 		gettimeofday(&currentTime, nullptr);
 		// only interested in second granularity, so ignoring tc_usec
-		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s); 
+		if (detailed.entry.state != 'X') detailed.elapsed = sec_to_dhms(currentTime.tv_sec - detailed.entry.cpu_s);
 		else detailed.elapsed = sec_to_dhms(detailed.entry.death_time);
 		if (detailed.elapsed.size() > 8) detailed.elapsed.resize(detailed.elapsed.size() - 3);
 
@@ -1207,6 +1210,7 @@ namespace Proc {
 			}
 			//? Set correct state of dead processes if paused
 			else {
+				const bool keep_dead_proc_usage = Config::getB("keep_dead_proc_usage");
 				for (auto& r : current_procs) {
 					if (rng::find(found, r.pid) == found.end()) {
 						if (r.state != 'X') {
@@ -1217,7 +1221,7 @@ namespace Proc {
 						r.state = 'X';
 						dead_procs.emplace(r.pid);
 						//? Reset cpu usage for dead processes if paused and option is set
-						if (!Config::getB("keep_dead_proc_usage")) {
+						if (!keep_dead_proc_usage) {
 							r.cpu_p = 0.0;
 							r.mem = 0;
 						}
@@ -1280,7 +1284,7 @@ namespace Proc {
 				}
 				toggle_children = -1;
 			}
-			
+
 			if (auto find_pid = (collapse != -1 ? collapse : expand); find_pid != -1) {
 				auto collapser = rng::find(current_procs, find_pid, &proc_info::pid);
 				if (collapser != current_procs.end()) {
@@ -1297,6 +1301,13 @@ namespace Proc {
 				}
 				collapse = expand = -1;
 			}
+
+			if (collapse_all != -1) {
+				toggle_tree_collapse(current_procs);
+				collapse_all = -1;
+				if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+			}
+
 			if (should_filter or not filter.empty()) filter_found = 0;
 
 			vector<tree_proc> tree_procs;
@@ -1310,6 +1321,9 @@ namespace Proc {
 
 			//? Stable sort to retain selected sorting among processes with the same parent
 			rng::stable_sort(current_procs, rng::less{}, & proc_info::ppid);
+
+			//? Auto-collapse processes with many children when entering tree mode
+			_auto_collapse_oversized(current_procs, tree_mode_change);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {

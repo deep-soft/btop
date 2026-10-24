@@ -68,7 +68,10 @@ tab-size = 4
 #include <utility>
 #include <unordered_set>
 
+#include <fmt/format.h>
+
 #include "../btop_config.hpp"
+#include "../btop_log.hpp"
 #include "../btop_shared.hpp"
 #include "../btop_tools.hpp"
 
@@ -232,7 +235,7 @@ namespace Cpu {
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
-			Logger::warning("failed to open " + string(_PATH_SYSMON));
+			Logger::warning("failed to open {}", _PATH_SYSMON);
 			return got_sensors;
 		}
 
@@ -255,7 +258,7 @@ namespace Cpu {
 		for(const string &sensor : sensors) {
 			fields_array = prop_dictionary_get(prop_dictionary_t(dict), sensor.c_str());
 			if (prop_object_type(fields_array) != PROP_TYPE_ARRAY) {
-				Logger::warning("unknown device " + sensor);
+				Logger::warning("unknown device {}", sensor);
 			} else {
 				Cpu::cpu_sensor = sensor;
 				break;
@@ -281,7 +284,7 @@ namespace Cpu {
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
-			Logger::warning("failed to open " + string(_PATH_SYSMON));
+			Logger::warning("failed to open {}", _PATH_SYSMON);
 			return;
 		}
 
@@ -302,7 +305,7 @@ namespace Cpu {
 
 		prop_object_t fields_array = prop_dictionary_get(prop_dictionary_t(dict), Cpu::cpu_sensor.c_str());
 		if (prop_object_type(fields_array) != PROP_TYPE_ARRAY) {
-			Logger::warning("unknown device " + Cpu::cpu_sensor);
+			Logger::warning("unknown device {}", Cpu::cpu_sensor);
 			return;
 		}
 
@@ -429,7 +432,7 @@ namespace Cpu {
 
 		int fd = open(_PATH_SYSMON, O_RDONLY);
 		if (fd == -1) {
-			Logger::warning("failed to open " + string(_PATH_SYSMON));
+			Logger::warning("failed to open {}", _PATH_SYSMON);
 			has_battery = false;
 			return {0, 0.0, 0, ""};
 		}
@@ -575,9 +578,9 @@ namespace Cpu {
 				//? Reduce size if there are more values than needed for graph
 				if (cpu.core_percent.at(i).size() > 40) cpu.core_percent.at(i).pop_front();
 
-			} catch (const std::exception &e) {
-				Logger::error("Cpu::collect() : " + (string)e.what());
-				throw std::runtime_error("collect() : " + (string)e.what());
+			} catch (const std::exception& e) {
+				Logger::error("Cpu::collect() : {}", e.what());
+				throw std::runtime_error(fmt::format("collect() : {}", e.what()));
 			}
 
 		}
@@ -624,8 +627,6 @@ namespace Cpu {
 
 namespace Mem {
 	bool has_swap = false;
-	vector<string> fstab;
-	fs::file_time_type fstab_time;
 	int disk_ios = 0;
 	vector<string> last_found;
 
@@ -753,7 +754,7 @@ namespace Mem {
 			double uptime = system_uptime();
 			auto &disks_filter = Config::getS("disks_filter");
 			bool filter_exclude = false;
-			// auto only_physical = Config::getB("only_physical");
+			const auto only_physical = Config::getB("only_physical");
 			auto &disks = mem.disks;
 			vector<string> filter;
 			if (not disks_filter.empty()) {
@@ -769,17 +770,15 @@ namespace Mem {
 			vector<string> found;
 			found.reserve(last_found.size());
 			for (int i = 0; i < count; i++) {
-				auto fstype = string(stvfs[i].f_fstypename);
-				if (fstype == "autofs" || fstype == "devfs" || fstype == "linprocfs" || fstype == "procfs" || fstype == "tmpfs" || fstype == "linsysfs" ||
-					fstype == "fdesckfs") {
-					// in memory filesystems -> not useful to show
+				string_view fstype = stvfs[i].f_fstypename;
+				string_view dev = stvfs[i].f_mntfromname;
+				//? root_device: the kernel name for / until rc.d/root remounts it from fstab
+				if (only_physical and not dev.starts_with("/dev/") and dev != "root_device" and fstype != "zfs")
 					continue;
-				}
 
 				std::error_code ec;
 				string mountpoint = stvfs[i].f_mntonname;
-				string dev = stvfs[i].f_mntfromname;
-				mapping[dev] = mountpoint;
+				mapping[string(dev)] = mountpoint;
 
 				//? Match filter if not empty
 				if (not filter.empty()) {
@@ -824,7 +823,7 @@ namespace Mem {
 					continue;
 				struct statvfs vfs;
 				if (statvfs(mountpoint.c_str(), &vfs) < 0) {
-					Logger::warning("Failed to get disk/partition stats with statvfs() for: " + mountpoint);
+					Logger::warning("Failed to get disk/partition stats with statvfs() for: {}", mountpoint);
 					continue;
 				}
 				disk.total = vfs.f_blocks * vfs.f_frsize;
@@ -892,7 +891,7 @@ namespace Net {
 			IfAddrsPtr if_addrs {};
 			if (if_addrs.get_status() != 0) {
 				errors++;
-				Logger::error("Net::collect() -> getifaddrs() failed with id " + to_string(if_addrs.get_status()));
+				Logger::error("Net::collect() -> getifaddrs() failed with id {}", if_addrs.get_status());
 				redraw = true;
 				return empty_net;
 			}
@@ -927,7 +926,7 @@ namespace Net {
 							net[iface].ipv4 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv4 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}
@@ -938,7 +937,7 @@ namespace Net {
 							net[iface].ipv6 = ip;
 						} else {
 							int errsv = errno;
-							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface " + string(iface) + ", errno: " + strerror(errsv));
+							Logger::error("Net::collect() -> Failed to convert IPv6 to string for iface {}, errno: {}", iface, strerror(errsv));
 						}
 					}
 				}  //else, ignoring family==AF_LINK (see man 3 getifaddrs)
@@ -1097,7 +1096,7 @@ namespace Proc {
 	fs::file_time_type passwd_time;
 
 	uint64_t cputimes;
-	int collapse = -1, expand = -1, toggle_children = -1;
+	int collapse = -1, expand = -1, toggle_children = -1, collapse_all = -1;
 	uint64_t old_cputimes = 0;
 	atomic<int> numpids = 0;
 	int filter_found = 0;
@@ -1280,6 +1279,7 @@ namespace Proc {
 			}
 			//? Set correct state of dead processes if paused
 			else {
+				const bool keep_dead_proc_usage = Config::getB("keep_dead_proc_usage");
 				for (auto& r : current_procs) {
 					if (rng::find(found, r.pid) == found.end()) {
 						if (r.state != 'X') {
@@ -1290,7 +1290,7 @@ namespace Proc {
 						r.state = 'X';
 						dead_procs.emplace(r.pid);
 						//? Reset cpu usage for dead processes if paused and option is set
-						if (!Config::getB("keep_dead_proc_usage")) {
+						if (!keep_dead_proc_usage) {
 							r.cpu_p = 0.0;
 							r.mem = 0;
 						}
@@ -1358,6 +1358,13 @@ namespace Proc {
 				}
 				collapse = expand = -1;
 			}
+
+			if (collapse_all != -1) {
+				toggle_tree_collapse(current_procs);
+				collapse_all = -1;
+				if (Config::ints.at("proc_selected") > 0) locate_selection = true;
+			}
+
 			if (should_filter or not filter.empty()) filter_found = 0;
 
 			vector<tree_proc> tree_procs;
@@ -1371,6 +1378,9 @@ namespace Proc {
 
 			//? Stable sort to retain selected sorting among processes with the same parent
 			rng::stable_sort(current_procs, rng::less{}, & proc_info::ppid);
+
+			//? Auto-collapse processes with many children when entering tree mode
+			_auto_collapse_oversized(current_procs, tree_mode_change);
 
 			//? Start recursive iteration over processes with the lowest shared parent pids
 			for (auto& p : rng::equal_range(current_procs, current_procs.at(0).ppid, rng::less{}, &proc_info::ppid)) {
