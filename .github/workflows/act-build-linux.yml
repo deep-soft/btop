@@ -239,6 +239,9 @@ jobs:
           rm -R bin || true;
           rm -R obj || true;
 
+      - name: Install build tools
+        run: apk add --update --no-cache g++ linux-headers make mold
+
       - name: Build
         if: ${{ inputs.GPU_version }}
         id: build_gpu_one
@@ -274,7 +277,7 @@ jobs:
           mkdir -p .artifacts
           mkdir -p .package
 
-      - name: Create binary atrifacts
+      - name: Create binary artifacts
         if: ${{ inputs.GPU_version }}
         shell: bash
         run: |
